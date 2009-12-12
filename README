@@ -1,0 +1,29 @@
+libmvcc: a low-level library providing the basics for multi version concurrency control.
+
+MVCC, or Multi Version Concurrency Control, is a technique for implementing higly concurrent systems via transaction-like semantics.  It can be used for multi-threaded programming, but also in order to maintain snapshots of data.
+
+Central to the library is the idea of a timestamp.  The timestamp starts at zero at the start of the program and is incremented whenever any object changes in the system.
+
+The central unit of data storage is the versioned object.  A versioned object stores the history of its values; it allows the value of the object to be returned at any point in time.
+
+A snapshot is a view of the set of objects at a given point in time.  When a snapshot is active, all objects automatically will access the version active at that point in time.  By using a snapshot, the code can be sure to have a consistent view of the objects, regardless of modifications made since the snapshot was made.
+
+Finally, a sandbox is a place where speculative modifications to objects can be recorded.  Once these updates have all been made, they can be committed atomically (either all will be made or none).  This allows for transactional semantics.
+
+Note that this is not an optimistic spinning system: real sleeping locks are used, which allows elegant scalability to thousands of threads.  In addition, only one commit may occur at a time (although it may be possible eventually to allow non-conflicting commits to occur together).
+
+The following features are included or planned:
+* Versions that are no longer referenced by any snapshot are automatically cleaned up;
+* Deterministic memory management and internal garbage collection (no external garbage collection library required; interoperable with any memory management scheme);
+* Epoch renaming so that epoch numbers can be stored in a small integer rather than a 64 bit number as would normally be required
+* A minimum of locks, with everything possible done atomically
+
+Like to have:
+* Basic functionality in c; C++ bindings and test code
+* Packed data structures to reduce memory overhead;
+* Opportunistic early detection of transactions that must fail
+* Transaction priority to avoid livelocks
+* Adaptive locks: spin when the system is not busy, lock otherwise
+* Validators
+* Multiple concurrency models selectable
+* Ability for transactions to be "barged" (failed pre-emptively) by more important transactions to avoid livelocks
