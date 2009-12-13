@@ -22,27 +22,29 @@ namespace JMVCC {
 
 using namespace ML;
 
+typedef size_t Epoch;
+
 class Snapshot;
 class Versioned_Object;
 
 /// Global variable giving the number of committed transactions since the
 /// beginning of the program
-extern volatile size_t current_epoch_;
+extern volatile Epoch current_epoch_;
 
-inline size_t get_current_epoch()
+inline Epoch get_current_epoch()
 {
     return current_epoch_;
 }
 
-inline void set_current_epoch(size_t val)
+inline void set_current_epoch(Epoch val)
 {
     current_epoch_ = val;
 }
 
 /// Global variable giving the earliest epoch for which there is a snapshot
-extern size_t earliest_epoch_;
+extern Epoch earliest_epoch_;
 
-inline void set_earliest_epoch(size_t val)
+inline void set_earliest_epoch(Epoch val)
 {
     if (val < earliest_epoch_) {
         using namespace std;
@@ -53,7 +55,7 @@ inline void set_earliest_epoch(size_t val)
     earliest_epoch_ = val;
 }
 
-inline size_t get_earliest_epoch()
+inline Epoch get_earliest_epoch()
 {
     return earliest_epoch_;
 }
@@ -81,19 +83,19 @@ struct Snapshot_Info {
 
     struct Entry {
         std::set<Snapshot *> snapshots;
-        std::vector<std::pair<Versioned_Object *, size_t> > cleanups;
+        std::vector<std::pair<Versioned_Object *, Epoch> > cleanups;
     };
 
-    typedef std::map<size_t, Entry> Entries;
+    typedef std::map<Epoch, Entry> Entries;
     Entries entries;
 
     // Register the snapshot for the current epoch.  Returns the number of
     // the epoch it was registered under.
-    size_t register_snapshot(Snapshot * snapshot);
+    Epoch register_snapshot(Snapshot * snapshot);
 
     void remove_snapshot(Snapshot * snapshot);
 
-    void register_cleanup(Versioned_Object * obj, size_t epoch_to_cleanup);
+    void register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup);
 
     void
     perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard);
@@ -146,45 +148,22 @@ std::ostream & operator << (std::ostream & stream, const Status & status);
     done.
 */
 struct Snapshot : boost::noncopyable {
-    Snapshot()
-        : retries_(0), status(UNINITIALIZED)
-    {
-        register_me();
-    }
+    Snapshot();
 
-    ~Snapshot()
-    {
-        snapshot_info.remove_snapshot(this);
-    }
+    ~Snapshot();
 
-    void restart()
-    {
-        status = RESTARTING;
-        ++retries_;
-        if (get_current_epoch() != epoch_) {
-            snapshot_info.remove_snapshot(this);
-            register_me();
-        }
-    }
+    void restart();
 
-    void register_me()
-    {
-        snapshot_info.register_snapshot(this);
-
-        if (status == UNINITIALIZED)
-            status = INITIALIZED;
-        else if (status == RESTARTING)
-            status = RESTARTED;
-    }
-
-    size_t epoch() const { return epoch_; }
+    Epoch epoch() const { return epoch_; }
 
     int retries() const { return retries_; }
 
 private:
     friend class Snapshot_Info;
-    size_t epoch_;  ///< Epoch at which snapshot was taken
+    Epoch epoch_;  ///< Epoch at which snapshot was taken
     int retries_;
+
+    void register_me();
 
 public:
     Status status;
