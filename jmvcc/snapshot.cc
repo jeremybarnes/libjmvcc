@@ -355,7 +355,7 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
             //cerr << obj_stream_before.str();
             cerr << "object after cleanup: " << endl;
             cerr << obj_stream.str();
-            //abort();  // let execution continus; see if this causes an error
+            //abort();  // let execution continue; see if this causes an error
         }
     }
 }
@@ -372,6 +372,68 @@ register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup)
 
     Entries::iterator it = boost::prior(entries.end());
     it->second.cleanups.push_back(make_pair(obj, epoch_to_cleanup));
+}
+
+void
+Snapshot_Info::
+compress_epochs()
+{
+    // We have to block any commits that are happening so that we can't get
+    // any new epochs
+    ACE_Guard<ACE_Mutex> commit_guard(commit_lock);
+
+    ACE_Guard<Mutex> guard(lock);
+    
+    /* There could be any number of snapshots that are currently happening
+       concurrently with us doing this.  We have to make sure that we don't
+       modify their behaviour as we are renaming epochs.
+
+       To analyse this, look at the following situation
+
+       v16      s16
+       v23
+                s47
+
+       There is a snapshot and a value at epoch 16, a new value at epoch
+       23 and a snapshot at epoch 47.  What we want to do is transform it
+       to this:
+
+       v1       s1
+       v2       s2
+
+       In order to do this, we preceed as follows:
+
+       1.  We change the epoch of the value at epoch 16 to that for its final
+           epoch: 1.  Note that a read of this value by snapshot 16 will still
+           return the same value.
+
+       v1       s16
+       v23
+                s47
+
+       2.  Now we can rename the epoch for snapshot 16:
+
+       v1       s1
+       v23
+                s47
+
+       3.  The value at epoch 23.  Again, changing its epoch will not change
+           the value that is read by snapshot 47:
+
+       v1       s1
+       v2
+                s47
+
+       4.  Finally, we rename snapshot 47 to snapshot 1
+
+       v1       s1
+       v2       s2
+
+       By doing these operations in this order, it is possible to compress
+       the epochs without having to block all of the threads.
+
+       Later on, it may be possible to avoid taking the commit lock.
+    */
 }
 
 void

@@ -10,8 +10,8 @@
 
 #include <iostream>
 #include <string>
-#include "utils/string_functions.h"
 #include "jmvcc_defs.h"
+
 
 namespace JMVCC {
 
@@ -24,14 +24,6 @@ namespace JMVCC {
 /// object.
 
 struct Versioned_Object {
-
-    Versioned_Object()
-    {
-    }
-
-    // Lock the current value into memory, so that no other transaction is
-    // allowed to modify it
-    //virtual void lock_value() const = 0;
 
     // Get the commit ready and check that everything can go ahead, but
     // don't actually perform the commit
@@ -46,18 +38,12 @@ struct Versioned_Object {
     // Clean up an unused version
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch) = 0;
     
-    virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const
-    {
-    }
+    virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 
-    virtual void dump_unlocked(std::ostream & stream = std::cerr, int indent = 0) const
-    {
-    }
+    virtual void dump_unlocked(std::ostream & stream = std::cerr,
+                               int indent = 0) const;
 
-    virtual std::string print_local_value(void * val) const
-    {
-        return ML::format("%08p", val);
-    }
+    virtual std::string print_local_value(void * val) const;
 };
 
 
