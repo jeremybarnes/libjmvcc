@@ -1,6 +1,8 @@
 JMVCC_SOURCES := \
 	../exception_hook.cc \
-	snapshot.cc
+	snapshot.cc \
+	sandbox.cc \
+	transaction.cc
 
 JMVCC_LINK :=  boost_date_time-mt
 

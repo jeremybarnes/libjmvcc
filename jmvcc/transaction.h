@@ -13,14 +13,19 @@
 
 namespace JMVCC {
 
+class Transaction;
 
 /// Current transaction for this thread
-__thread Transaction * current_trans = 0;
+extern __thread Transaction * current_trans;
 
 size_t current_trans_epoch();
 
 /// For the moment, only one commit can happen at a time
-ACE_Mutex commit_lock;
+extern ACE_Mutex commit_lock;
+
+void no_transaction_exception(const Versioned_Object * obj) __attribute__((__noreturn__));
+size_t current_trans_epoch();
+
 
 
 /*****************************************************************************/
@@ -30,23 +35,9 @@ ACE_Mutex commit_lock;
 /// A transaction is both a snapshot and a sandbox.
 struct Transaction : public Snapshot, public Sandbox {
 
-    bool commit()
-    {
-        status = COMMITTING;
-        bool result = Sandbox::commit(epoch());
-        status = result ? COMMITTED : FAILED;
-        if (!result) restart();
-        return result;
-    }
+    bool commit();
 
-    void dump(std::ostream & stream = std::cerr, int indent = 0)
-    {
-        string s(indent, ' ');
-        stream << s << "snapshot: epoch " << epoch() << " retries "
-               << retries() << endl;
-        stream << s << "sandbox" << endl;
-        Sandbox::dump(stream, indent);
-    }
+    void dump(std::ostream & stream = std::cerr, int indent = 0);
 };
 
 /*****************************************************************************/
@@ -66,18 +57,6 @@ struct Local_Transaction : public Transaction {
 
     Transaction * old_trans;
 };
-
-void no_transaction_exception(const Versioned_Object * obj)
-{
-    throw Exception("not in a transaction");
-}
-
-size_t current_trans_epoch()
-{
-    return (current_trans ? current_trans->epoch() : 0);
-}
-
-
 
 
 } // namespace JMVCC

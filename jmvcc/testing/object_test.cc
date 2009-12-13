@@ -18,18 +18,15 @@
 #include <boost/thread/barrier.hpp>
 #include <boost/bind.hpp>
 #include <boost/tuple/tuple.hpp>
-#include "arch/cmp_xchg.h"
-#include "arch/threads.h"
 #include "arch/exception_handler.h"
+#include "arch/threads.h"
 #include <set>
-#include "utils/circular_buffer.h"
-#include "utils/lightweight_hash.h"
 #include "arch/timers.h"
-#include "ace/Mutex.h"
 #include "arch/backtrace.h"
-#include <pthread.h>
 #include <sched.h>
 #include "jmvcc/history.h"
+#include "jmvcc/transaction.h"
+#include "jmvcc/versioned.h"
 
 using namespace ML;
 using namespace JMVCC;
@@ -64,142 +61,6 @@ struct Spinlock {
     volatile int value;
 };
 
-typedef ACE_Mutex Mutex;
-//typedef Spinlock Mutex;
-
-struct Transaction;
-
-
-
-/* Obsolete Version Cleanups
-
-   The goal of this code is to make sure that each version of each object
-   gets cleaned up exactly once, at the point when the last snapshot that
-   references the version is removed.
-
-   One way to do this is to make sure that each version is either:
-   a) the newest version of the object, or
-   b) on a list of versions to clean up somewhere, or
-   c) cleaned up
-
-   Here, we describe how we maintain and shuffle these lists.
-
-   Snapshot to Version Mapping
-   ---------------------------
-
-   Each version will have one or more snapshots that sees it (the exception is
-   the newest version of an object, which may not have any snapshots that see
-   it).
-
-   versions    snapshots
-   --------    ---------
-        v0
-                  s10
-                  s15
-
-       v20        s20
-                  s30
-                  s40
-
-       v50
-                  s70
-
-       v80
-                  s90
-                  s600
-
-   In this diagram, we have 4 versions of the object (v0, v20, v50 and v80)
-   and 6 snapshots.  A version is visible to all snapshots that have an
-   epoch >= the version number but < the next version number.  So v0 is
-   visible to s10 and s15; v20 is visible to s20, s30 and s40; v40 is visible
-   to s70 and v80 is visible to s90 and s600.
-
-   We need to make sure that the version is cleaned up when the *last*
-   snapshot that refers to it is destroyed.
-
-   The way that we do this is as follows.  We assume that a later snapshot
-   will live longer than an earlier one, and so we put the version to destroy
-   on the list for the latest snapshot.  So we have the following lists of
-   objects to clean up:
-
-   versions    snapshots    tocleanup
-   --------    ---------    ---------
-        v0
-                  s10
-                  s15       v0
-
-       v20        s20
-                  s30
-                  s40       v20
-
-       v50
-                  s70       v50
-
-       v80
-                  s90
-                  s600
-   
-   Note that v80, as the most recent value, is not on any free list.
-   When snapshot 20 is destroyed, there is nothing to clean up and so it
-   simply is removed.  Same story for snapshot 30; now when snapshot 40 is
-   destroyed it will clean up v20.
-
-   However, there is no guarantee that the order of creation of the snapshots
-   will be the reverse order of destruction.  Let's consider what happens
-   if snapshot 40 finishes before snapshot 30 and snapshot 20.  In this case,
-   it is not correct to clean up v20 as s20 and s30 still refer to it.  Instead,
-   it needs to be moved to the cleanup list for s30.  We know that the version
-   is still referenced because the epoch for the version (20) is less than or
-   equal to the epoch for the previous snapshot (30).
-
-   As a result, we simply move it to the cleanup list for s30.
-
-   versions    snapshots    tocleanup      deleted
-   --------    ---------    ---------      -------
-        v0
-                  s10
-                  s15       v0
-
-       v20        s20
-                  s30       v20
-                                           s40       
-
-       v50
-                  s70       v50
-
-       v80
-                  s90
-                  s600
-   
-   Thus, the invariant is that a version will always be on the cleanup list of
-   the latest snapshot that references it.
-   
-   When we cleanup, we look at the previous snapshot.  If the epoch of that
-   snapshot is >= the epoch for our version, then we move it to the free
-   list of that snapshot.  Otherwise, we clean it up.
-
-   Finally, when we create a new version, we need to arrange for the previous
-   most recent version to go onto a free list.  Consider a new version of the
-   object on epoch 900:
-
-   versions    snapshots    tocleanup      deleted
-   --------    ---------    ---------      -------
-        v0
-                  s10
-                  s15       v0
-
-       v20        s20
-                  s30       v20
-                                           s40       
-
-       v50
-                  s70       v50
-
-       v80
-                  s90
-                  s600      v80 <-- added
-      v900
-*/
 
 
 BOOST_AUTO_TEST_CASE( test0 )
@@ -252,7 +113,7 @@ BOOST_AUTO_TEST_CASE( test0 )
         BOOST_CHECK_EQUAL(++myval.mutate(), 7);
 
         // Check that it was recorded
-        BOOST_CHECK_EQUAL(trans1.local_values.size(), 1);
+        BOOST_CHECK_EQUAL(trans1.num_local_values(), 1);
 
         // FOR TESTING, increment the current epoch
         set_current_epoch(get_current_epoch() + 1);

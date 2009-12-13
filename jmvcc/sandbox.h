@@ -8,11 +8,23 @@
 #ifndef __jmvcc__sandbox_h__
 #define __jmvcc__sandbox_h__
 
+
+#include "utils/lightweight_hash.h"
+#include "utils/string_functions.h"
+#include "versioned_object.h"
+#include <boost/tuple/tuple.hpp>
+
 namespace JMVCC {
+
+
+/*****************************************************************************/
+/* SANDBOX                                                                   */
+/*****************************************************************************/
 
 /// A sandbox provides a place where writes don't affect the underlying
 /// objects.  These writes can then be committed atomically.
-struct Sandbox {
+
+class Sandbox {
     struct Entry {
         Entry() : val(0), size(0)
         {
@@ -23,28 +35,17 @@ struct Sandbox {
 
         std::string print() const
         {
-            return format("val: %p size: %zd", val, size);
+            return ML::format("val: %p size: %zd", val, size);
         }
     };
 
-    typedef Lightweight_Hash<Versioned_Object *, Entry> Local_Values;
+    typedef ML::Lightweight_Hash<Versioned_Object *, Entry> Local_Values;
     Local_Values local_values;
 
-    ~Sandbox()
-    {
-        clear();
-    }
+public:
+    ~Sandbox();
 
-    void clear()
-    {
-        for (Local_Values::iterator
-                 it = local_values.begin(),
-                 end = local_values.end();
-             it != end;  ++it) {
-            free(it->second.val);
-        }
-        local_values.clear();
-    }
+    void clear();
 
     template<typename T>
     T * local_value(Versioned_Object * obj)
@@ -60,7 +61,7 @@ struct Sandbox {
         bool inserted;
         Local_Values::iterator it;
         boost::tie(it, inserted)
-            = local_values.insert(make_pair(obj, Entry()));
+            = local_values.insert(std::make_pair(obj, Entry()));
         if (inserted) {
             it->second.val = malloc(sizeof(T));
             new (it->second.val) T(initial_value);
@@ -68,7 +69,7 @@ struct Sandbox {
         }
         return reinterpret_cast<T *>(it->second.val);
     }
-
+    
     template<typename T>
     const T * local_value(const Versioned_Object * obj)
     {
@@ -81,78 +82,17 @@ struct Sandbox {
         return local_value(const_cast<Versioned_Object *>(obj), initial_value);
     }
 
-    bool commit(size_t old_epoch)
-    {
-        ACE_Guard<ACE_Mutex> guard(commit_lock);
+    bool commit(size_t old_epoch);
 
-        size_t new_epoch = get_current_epoch() + 1;
+    void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 
-        bool result = true;
+    size_t num_local_values() const { return local_values.size(); }
 
-        Local_Values::iterator
-            it = local_values.begin(),
-            end = local_values.end();
-
-        // Commit everything
-        for (; result && it != end;  ++it)
-            result = it->first->setup(old_epoch, new_epoch, it->second.val);
-
-        if (result) {
-            // First we update the epoch.  This ensures that any new snapshot
-            // created will see the correct epoch value, and won't look at
-            // old values which might not have a list.
-            //
-            // IT IS REALLY IMPORTANT THAT THIS BE DONE IN THE GIVEN ORDER.
-            // If we were to update the epoch afterwards, then new transactions
-            // could be created with the old epoch.  These transactions might
-            // need the values being cleaned up, racing with the creation
-            // process.
-            set_current_epoch(new_epoch);
-
-            // Make sure these writes are seen before we clean up
-            __sync_synchronize();
-
-            // Success: we are in a new epoch
-            for (it = local_values.begin(); it != end;  ++it)
-                it->first->commit(new_epoch);
-        }
-        else {
-            // Rollback any that were set up if there was a problem
-            for (end = boost::prior(it), it = local_values.begin();
-                 it != end;  ++it)
-                it->first->rollback(new_epoch, it->second.val);
-        }
-
-        // TODO: for failed transactions, we'd do better to keep the
-        // structure to avoid reallocations
-        // TODO: clear as we go to better use cache
-        clear();
-        
-        return result;
-    }
-
-    void dump(std::ostream & stream = std::cerr, int indent = 0) const
-    {
-        string s(indent, ' ');
-        stream << "sandbox: " << local_values.size() << " local values"
-             << endl;
-        int i = 0;
-        for (Local_Values::const_iterator
-                 it = local_values.begin(), end = local_values.end();
-             it != end;  ++it, ++i) {
-            stream << s << "  " << i << " at " << it->first << ": value "
-                 << it->first->print_local_value(it->second.val)
-                 << endl;
-        }
-    }
+    friend std::ostream & operator << (std::ostream&, const Sandbox::Entry&);
 };
 
-inline std::ostream &
-operator << (std::ostream & stream,
-             const Sandbox::Entry & entry)
-{
-    return stream << entry.print();
-}
+std::ostream &
+operator << (std::ostream & stream, const Sandbox::Entry & entry);
 
 
 } // namespace JMVCC

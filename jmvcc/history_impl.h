@@ -9,7 +9,7 @@
 #define __jmvcc__history_impl_h__
 
 #include "snapshot.h"
-#incldue "transaction.h"
+#include "transaction.h"
 
 namespace JMVCC {
 

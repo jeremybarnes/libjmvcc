@@ -10,11 +10,14 @@
 
 #include "history.h"
 #include "versioned_object.h"
+#include <ace/Synch.h>
 
 namespace JMVCC {
 
 template<typename T>
 struct Versioned : public Versioned_Object {
+    typedef ACE_Mutex Mutex;
+
     Versioned()
         : history(new T())
     {
@@ -115,8 +118,8 @@ struct Versioned : public Versioned_Object {
 
     void dump_itl(std::ostream & stream, int indent = 0) const
     {
-        string s(indent, ' ');
-        stream << s << "object at " << this << endl;
+        std::string s(indent, ' ');
+        stream << s << "object at " << this << std::endl;
         history.dump(stream, indent + 2);
     }
 

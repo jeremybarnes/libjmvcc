@@ -42,7 +42,7 @@ inline void set_current_epoch(size_t val)
 /// Global variable giving the earliest epoch for which there is a snapshot
 extern size_t earliest_epoch_;
 
-void set_earliest_epoch(size_t val)
+inline void set_earliest_epoch(size_t val)
 {
     if (val < earliest_epoch_) {
         using namespace std;
@@ -53,7 +53,7 @@ void set_earliest_epoch(size_t val)
     earliest_epoch_ = val;
 }
 
-size_t get_earliest_epoch()
+inline size_t get_earliest_epoch()
 {
     return earliest_epoch_;
 }
@@ -135,23 +135,7 @@ enum Status {
     FAILED
 };
 
-std::ostream & operator << (std::ostream & stream, const Status & status)
-{
-    switch (status) {
-    case UNINITIALIZED: return stream << "UNINITIALIZED";
-    case INITIALIZED:   return stream << "INITIALIZED";
-    case RESTARTING:    return stream << "RESTARTING";
-    case RESTARTING0:   return stream << "RESTARTING0";
-    case RESTARTING0A:  return stream << "RESTARTING0A";
-    case RESTARTING0B:  return stream << "RESTARTING0B";
-    case RESTARTING2:   return stream << "RESTARTING2";
-    case RESTARTED:     return stream << "RESTARTED";
-    case COMMITTING:    return stream << "COMMITTING";
-    case COMMITTED:     return stream << "COMMITTED";
-    case FAILED:        return stream << "FAILED";
-    default:            return stream << ML::format("Status(%d)", status);
-    }
-}
+std::ostream & operator << (std::ostream & stream, const Status & status);
 
 /*****************************************************************************/
 /* SNAPSHOT                                                                  */
