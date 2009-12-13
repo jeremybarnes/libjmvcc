@@ -14,6 +14,20 @@
 
 namespace JMVCC {
 
+
+/*****************************************************************************/
+/* VERSIONED                                                                 */
+/*****************************************************************************/
+
+/** This template takes an underlying type and turns it into a versioned
+    object.  It's used for simple objects where a new copy of the object
+    can be stored for each version.
+
+    For more complicated cases (for example, where a lot of the state
+    can be shared between an old and a new version), the object should
+    derive directly from Versioned_Object instead.
+*/
+
 template<typename T>
 struct Versioned : public Versioned_Object {
     typedef ACE_Mutex Mutex;
@@ -71,12 +85,15 @@ struct Versioned : public Versioned_Object {
         return history.value_at_epoch(current_trans->epoch(), this);
     }
 
-    //private:
+    size_t history_size() const { return history.size(); }
+
+private:
     // Implement object interface
 
     History<T> history;
     mutable Mutex lock;
 
+public:
     virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * data)
     {
         ACE_Guard<Mutex> guard(lock);
