@@ -25,12 +25,6 @@ void no_transaction_exception(const Versioned_Object * obj)
     throw Exception("not in a transaction");
 }
 
-size_t current_trans_epoch()
-{
-    return (current_trans ? current_trans->epoch() : 0);
-}
-
-
 
 /*****************************************************************************/
 /* TRANSACTION                                                               */

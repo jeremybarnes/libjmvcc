@@ -42,7 +42,7 @@ struct Versioned_Object {
     // Roll back a setup commit
     virtual void rollback(size_t new_epoch, void * data) throw () = 0;
 
-    // Clean up information from an unused epoch
+    // Clean up an unused version
     virtual void cleanup(size_t unused_epoch, size_t trigger_epoch) = 0;
     
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const

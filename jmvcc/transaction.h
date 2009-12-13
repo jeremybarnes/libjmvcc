@@ -24,7 +24,6 @@ size_t current_trans_epoch();
 extern ACE_Mutex commit_lock;
 
 void no_transaction_exception(const Versioned_Object * obj) __attribute__((__noreturn__));
-size_t current_trans_epoch();
 
 
 
@@ -40,25 +39,21 @@ struct Transaction : public Snapshot, public Sandbox {
     void dump(std::ostream & stream = std::cerr, int indent = 0);
 };
 
+
 /*****************************************************************************/
 /* LOCAL_TRANSACTION                                                         */
 /*****************************************************************************/
 struct Local_Transaction : public Transaction {
-    Local_Transaction()
-    {
-        old_trans = current_trans;
-        current_trans = this;
-    }
+    Local_Transaction();
 
-    ~Local_Transaction()
-    {
-        current_trans = old_trans;
-    }
+    ~Local_Transaction();
 
     Transaction * old_trans;
 };
 
 
 } // namespace JMVCC
+
+#include "transaction_impl.h"
 
 #endif /* __jmvcc__transaction_h__ */
