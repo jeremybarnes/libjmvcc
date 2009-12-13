@@ -34,21 +34,21 @@ struct History {
     const T & most_recent_value(const Versioned_Object * obj) const;
 
     /// Return the value for the given epoch
-    const T & value_at_epoch(size_t epoch, const Versioned_Object * obj) const;
+    const T & value_at_epoch(Epoch epoch, const Versioned_Object * obj) const;
 
     /// Update the current value at a new epoch.  Returns true if it
     /// succeeded.  If the value has changed since the old epoch, it will
     /// not succeed.
-    bool set_current_value(size_t old_epoch, size_t new_epoch,
+    bool set_current_value(Epoch old_epoch, Epoch new_epoch,
                            const T & new_value);
 
     void cleanup_old_value(Versioned_Object * obj);
 
     /// Erase the entry that was speculatively added
-    void rollback(size_t old_epoch);
+    void rollback(Epoch old_epoch);
 
     /// Clean up the entry for an unneeded epoch
-    void cleanup(size_t unneeded_epoch, const Versioned_Object * obj, size_t trigger_epoch);
+    void cleanup(Epoch unneeded_epoch, const Versioned_Object * obj, Epoch trigger_epoch);
     void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 
 private:
@@ -58,12 +58,12 @@ private:
         {
         }
 
-        Entry(size_t epoch, T * value)
+        Entry(Epoch epoch, T * value)
             : epoch(epoch), value(value)
         {
         }
 
-        size_t epoch;
+        Epoch epoch;
         T * value;
     };
 
@@ -80,7 +80,7 @@ private:
     // safety
     struct Entry_Holder;
 
-    Entry_Holder new_entry(size_t epoch, const T & initial);
+    Entry_Holder new_entry(Epoch epoch, const T & initial);
 
     void cleanup_entry(const Entry & entry);
 };

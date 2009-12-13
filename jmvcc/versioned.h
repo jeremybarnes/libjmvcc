@@ -77,7 +77,7 @@ struct Versioned : public Versioned_Object {
     History<T> history;
     mutable Mutex lock;
 
-    virtual bool setup(size_t old_epoch, size_t new_epoch, void * data)
+    virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * data)
     {
         ACE_Guard<Mutex> guard(lock);
         bool result = history.set_current_value(old_epoch, new_epoch,
@@ -85,20 +85,20 @@ struct Versioned : public Versioned_Object {
         return result;
     }
 
-    virtual void commit(size_t new_epoch) throw ()
+    virtual void commit(Epoch new_epoch) throw ()
     {
         // Now that it's definitive, we can clean up any old values
         ACE_Guard<Mutex> guard(lock);
         history.cleanup_old_value(this);
     }
 
-    virtual void rollback(size_t new_epoch, void * data) throw ()
+    virtual void rollback(Epoch new_epoch, void * data) throw ()
     {
         ACE_Guard<Mutex> guard(lock);
         history.rollback(new_epoch);
     }
 
-    virtual void cleanup(size_t unused_epoch, size_t trigger_epoch)
+    virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
     {
         ACE_Guard<Mutex> guard(lock);
         history.cleanup(unused_epoch, this, trigger_epoch);

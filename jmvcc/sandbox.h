@@ -82,7 +82,7 @@ public:
         return local_value(const_cast<Versioned_Object *>(obj), initial_value);
     }
 
-    bool commit(size_t old_epoch);
+    bool commit(Epoch old_epoch);
 
     void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 

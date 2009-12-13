@@ -82,7 +82,7 @@ most_recent_value(const Versioned_Object * obj) const
 template<typename T>
 bool
 History<T>::
-set_current_value(size_t old_epoch, size_t new_epoch,
+set_current_value(Epoch old_epoch, Epoch new_epoch,
                   const T & new_value)
 {
     if (entries.empty())
@@ -110,7 +110,7 @@ cleanup_old_value(Versioned_Object * obj)
     //if (entries.size() < 2) return;
 
     // The second last entry needs to be cleaned up by the last snapshot
-    size_t epoch = entries[-2].epoch;
+    Epoch epoch = entries[-2].epoch;
 
     snapshot_info.register_cleanup(obj, epoch);
 }
@@ -119,7 +119,7 @@ cleanup_old_value(Versioned_Object * obj)
 template<typename T>
 void
 History<T>::
-rollback(size_t old_epoch)
+rollback(Epoch old_epoch)
 {
     if (entries.empty())
         throw Exception("entries was empty");
@@ -135,7 +135,7 @@ rollback(size_t old_epoch)
 template<typename T>
 void
 History<T>::
-cleanup(size_t unneeded_epoch, const Versioned_Object * obj, size_t trigger_epoch)
+cleanup(Epoch unneeded_epoch, const Versioned_Object * obj, Epoch trigger_epoch)
 {
     if (entries.size() <= 1)
         throw Exception("cleaning up with < 2 values");
@@ -152,7 +152,7 @@ cleanup(size_t unneeded_epoch, const Versioned_Object * obj, size_t trigger_epoc
 
         if (it->epoch == unneeded_epoch) {
                 
-            size_t my_earliest_epoch = get_earliest_epoch();
+            Epoch my_earliest_epoch = get_earliest_epoch();
             if (i == 0 && entries[1].epoch > my_earliest_epoch) {
                 using namespace std;
                 cerr << "*** DESTROYING EARLIEST EPOCH FOR OBJECT "
@@ -216,7 +216,7 @@ validate() const
     ssize_t e = 0;  // epoch we are up to
 
     for (unsigned i = 0;  i < entries.size();  ++i) {
-        size_t e2 = entries[i]->epoch;
+        Epoch e2 = entries[i]->epoch;
         if (e2 > get_current_epoch() + 1) {
             using namespace std;
             cerr << "e = " << e << " e2 = " << e2 << endl;
@@ -237,7 +237,7 @@ validate() const
 
 template<typename T>
 struct History<T>::Entry_Holder {
-    Entry_Holder(size_t epoch, T * value)
+    Entry_Holder(Epoch epoch, T * value)
         : entry(epoch, value), used(false)
     {
     }
@@ -264,7 +264,7 @@ struct History<T>::Entry_Holder {
 template<typename T>
 typename History<T>::Entry_Holder
 History<T>::
-new_entry(size_t epoch, const T & initial)
+new_entry(Epoch epoch, const T & initial)
 {
     T * value = allocator.allocate(1);
     try {
@@ -291,7 +291,7 @@ cleanup_entry(const Entry & entry)
 template<typename T>
 const T &
 History<T>::
-value_at_epoch(size_t epoch, const Versioned_Object * obj) const
+value_at_epoch(Epoch epoch, const Versioned_Object * obj) const
 {
     if (entries.empty())
         throw Exception("attempt to obtain value for object that never "

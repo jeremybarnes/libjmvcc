@@ -38,11 +38,11 @@ clear()
 
 bool
 Sandbox::
-commit(size_t old_epoch)
+commit(Epoch old_epoch)
 {
     ACE_Guard<ACE_Mutex> guard(commit_lock);
 
-    size_t new_epoch = get_current_epoch() + 1;
+    Epoch new_epoch = get_current_epoch() + 1;
 
     bool result = true;
 

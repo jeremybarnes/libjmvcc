@@ -11,6 +11,7 @@
 #include <iostream>
 #include <string>
 #include "utils/string_functions.h"
+#include "jmvcc_defs.h"
 
 namespace JMVCC {
 
@@ -34,16 +35,16 @@ struct Versioned_Object {
 
     // Get the commit ready and check that everything can go ahead, but
     // don't actually perform the commit
-    virtual bool setup(size_t old_epoch, size_t new_epoch, void * data) = 0;
+    virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * data) = 0;
 
     // Confirm a setup commit, making it permanent
-    virtual void commit(size_t new_epoch) throw () = 0;
+    virtual void commit(Epoch new_epoch) throw () = 0;
 
     // Roll back a setup commit
-    virtual void rollback(size_t new_epoch, void * data) throw () = 0;
+    virtual void rollback(Epoch new_epoch, void * data) throw () = 0;
 
     // Clean up an unused version
-    virtual void cleanup(size_t unused_epoch, size_t trigger_epoch) = 0;
+    virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch) = 0;
     
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const
     {

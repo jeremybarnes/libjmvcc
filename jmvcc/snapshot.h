@@ -17,15 +17,11 @@
 #include "ace/Synch.h"
 #include "utils/string_functions.h"
 #include <boost/utility.hpp>
+#include "jmvcc_defs.h"
 
 namespace JMVCC {
 
 using namespace ML;
-
-typedef size_t Epoch;
-
-class Snapshot;
-class Versioned_Object;
 
 /// Global variable giving the number of committed transactions since the
 /// beginning of the program

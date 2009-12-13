@@ -11,8 +11,8 @@ using namespace std;
 
 namespace JMVCC {
 
-volatile size_t current_epoch_ = 1;
-size_t earliest_epoch_ = 1;
+volatile Epoch current_epoch_ = 1;
+Epoch earliest_epoch_ = 1;
 
 Snapshot_Info snapshot_info;
 
@@ -151,7 +151,7 @@ Snapshot_Info snapshot_info;
       v900
 */
 
-size_t
+Epoch
 Snapshot_Info::
 register_snapshot(Snapshot * snapshot)
 {
@@ -266,7 +266,7 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
        here (due to being needed by a later snapshot) will need to be
        moved to that list */
     Entry * prev_snapshot = 0;
-    size_t prev_epoch = 0;
+    Epoch prev_epoch = 0;
     
     Entries::iterator itnext = boost::next(it);
 
@@ -303,11 +303,11 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
     Entry & entry = it->second;
 
     // List of things to clean up once we release the guard
-    vector<pair<Versioned_Object *, size_t> > to_clean_up;
+    vector<pair<Versioned_Object *, Epoch> > to_clean_up;
     
     for (unsigned i = 0;  i < entry.cleanups.size();  ++i) {
         Versioned_Object * obj = entry.cleanups[i].first;
-        size_t epoch = entry.cleanups[i].second;
+        Epoch epoch = entry.cleanups[i].second;
         
         //cerr << "epoch = " << epoch << endl;
         
@@ -324,7 +324,7 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
     
     to_clean_up.swap(entry.cleanups);
 
-    size_t snapshot_epoch = it->first;
+    Epoch snapshot_epoch = it->first;
 
     entries.erase(it);
 
@@ -335,7 +335,7 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
     // take the object lock with the snapshot_info lock held).
     for (unsigned i = 0;  i < to_clean_up.size();  ++i) {
         Versioned_Object * obj = to_clean_up[i].first;
-        size_t epoch = to_clean_up[i].second;
+        Epoch epoch = to_clean_up[i].second;
         
         //debug << "cleaning up object " << obj << " with unneeded epoch "
         //      << epoch << endl;
@@ -362,7 +362,7 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
 
 void
 Snapshot_Info::
-register_cleanup(Versioned_Object * obj, size_t epoch_to_cleanup)
+register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup)
 {
     // NOTE: this is called with the object's lock held
     ACE_Guard<Mutex> guard(lock);
@@ -385,7 +385,7 @@ dump_unlocked(std::ostream & stream)
     stream << "  current_trans: " << current_trans << endl;
     stream << "  snapshot epochs: " << entries.size() << endl;
     int i = 0;
-    for (map<size_t, Entry>::const_iterator
+    for (map<Epoch, Entry>::const_iterator
              it = entries.begin(), end = entries.end();
          it != end;  ++it, ++i) {
         const Entry & entry = it->second;
