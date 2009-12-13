@@ -1,6 +1,5 @@
-/* object_test.cc
-   Jeremy Barnes, 21 September 2009
-   Copyright (c) 2009 Jeremy Barnes.  All rights reserved.
+/* object_test.cc Jeremy Barnes, 21 September 2009 Copyright (c) 2009
+   Jeremy Barnes.  All rights reserved.
 
    Test for the set functionality.
 */
@@ -18,6 +17,7 @@
 #include <boost/thread/barrier.hpp>
 #include <boost/bind.hpp>
 #include <boost/tuple/tuple.hpp>
+#include <boost/timer.hpp>
 #include "arch/exception_handler.h"
 #include "arch/threads.h"
 #include <set>
@@ -34,46 +34,17 @@ using namespace std;
 
 using boost::unit_test::test_suite;
 
-struct Spinlock {
-    Spinlock()
-        : value(0)
-    {
-    }
-
-    int acquire()
-    {
-        for (int tries = 0; true;  ++tries) {
-            if (__sync_bool_compare_and_swap(&value, 0, 1))
-                return 0;
-            if (tries == 100) {
-                tries = 0;
-                sched_yield();
-            }
-        }
-    }
-
-    int release()
-    {
-        __sync_lock_release(&value);
-        return 0;
-    }
-
-    volatile int value;
-};
-
-
-
 BOOST_AUTO_TEST_CASE( test0 )
 {
     // Check basic invariants
     BOOST_CHECK_EQUAL(current_trans, (Transaction *)0);
-    BOOST_CHECK_EQUAL(snapshot_info.entries.size(), 0);
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
 
     size_t starting_epoch = get_current_epoch();
 
     Versioned<int> myval(6);
 
-    BOOST_CHECK_EQUAL(snapshot_info.entries.size(), 0);
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
     BOOST_CHECK_EQUAL(myval.history.size(), 1);
     BOOST_CHECK_EQUAL(myval.read(), 6);
     
@@ -101,7 +72,7 @@ BOOST_AUTO_TEST_CASE( test0 )
         BOOST_CHECK_EQUAL(myval.read(), 6);
         
         // Check that the snapshot is properly there
-        BOOST_REQUIRE_EQUAL(snapshot_info.entries.size(), 1);
+        BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 1);
         BOOST_CHECK_EQUAL(snapshot_info.entries.begin()->first, get_current_epoch());
         BOOST_REQUIRE_EQUAL(snapshot_info.entries.begin()->second.snapshots.size(), 1);
         BOOST_CHECK_EQUAL(*snapshot_info.entries.begin()->second.snapshots.begin(), &trans1);
@@ -123,7 +94,7 @@ BOOST_AUTO_TEST_CASE( test0 )
         trans1.restart();
 
         // Check that the snapshot is properly there
-        BOOST_REQUIRE_EQUAL(snapshot_info.entries.size(), 1);
+        BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 1);
         BOOST_CHECK_EQUAL(snapshot_info.entries.begin()->first,
                           get_current_epoch());
         BOOST_REQUIRE_EQUAL(snapshot_info.entries.begin()->second.snapshots.size(), 1);
@@ -138,7 +109,7 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     BOOST_CHECK_EQUAL(myval.history.size(), 1);
     BOOST_CHECK_EQUAL(myval.read(), 6);
-    BOOST_CHECK_EQUAL(snapshot_info.entries.size(), 0);
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
     BOOST_CHECK_EQUAL(get_current_epoch(), starting_epoch + 1);
 
     current_epoch_ = 1;
@@ -444,7 +415,7 @@ void run_object_test2(int nthreads, int niter, int nvals)
     for (unsigned i = 0;  i < nvals;  ++i)
         total += vals[i].read();
 
-    BOOST_CHECK_EQUAL(snapshot_info.entries.size(), 0);
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
 
     BOOST_CHECK_EQUAL(total, 0);
     for (unsigned i = 0;  i < nvals;  ++i) {
@@ -465,6 +436,13 @@ BOOST_AUTO_TEST_CASE( test2 )
     run_object_test2(10, 10000, 100);
     run_object_test2(100, 1000, 10);
     run_object_test2(1000, 100, 100);
+
+    boost::timer t;
+    run_object_test2(1, 1000000, 1);
+    cerr << "elapsed for 1000000 iterations: " << t.elapsed() << endl;
+    cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()
+         << "s" << endl;
 }
+
 
 

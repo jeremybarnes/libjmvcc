@@ -19,6 +19,8 @@
 #include <boost/utility.hpp>
 #include "jmvcc_defs.h"
 
+class test0;   // for testing code
+
 namespace JMVCC {
 
 using namespace ML;
@@ -74,6 +76,25 @@ inline Epoch get_earliest_epoch()
 
 /// Information about transactions in progress
 struct Snapshot_Info {
+    // Register the snapshot for the current epoch.  Returns the number of
+    // the epoch it was registered under.
+    Epoch register_snapshot(Snapshot * snapshot);
+
+    void remove_snapshot(Snapshot * snapshot);
+
+    void register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup);
+
+    void dump(std::ostream & stream = std::cerr);
+
+    void validate() const
+    {
+        ACE_Guard<Mutex> guard(lock);
+        validate_unlocked();
+    }
+
+    size_t entry_count() const { return entries.size(); }
+
+private:
     typedef ACE_Mutex Mutex;
     mutable Mutex lock;
 
@@ -85,29 +106,20 @@ struct Snapshot_Info {
     typedef std::map<Epoch, Entry> Entries;
     Entries entries;
 
-    // Register the snapshot for the current epoch.  Returns the number of
-    // the epoch it was registered under.
-    Epoch register_snapshot(Snapshot * snapshot);
-
-    void remove_snapshot(Snapshot * snapshot);
-
-    void register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup);
-
-    void
-    perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard);
-
-    void dump(std::ostream & stream = std::cerr);
+    /** Compress a range of epochs to remove holes from the epoch space and
+        start back at zero.  Used once the epochs start to get too high:
+        we can't allow a wrap around, and we would prefer not to use
+        64 bits.
+    */
+    void compress_epochs();
 
     void dump_unlocked(std::ostream & stream = std::cerr);
 
-    void validate() const
-    {
-        ACE_Guard<Mutex> guard(lock);
-        validate_unlocked();
-    }
-
     void validate_unlocked() const;
 
+    void perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard);
+
+    friend class ::test0;
 };
 
 extern Snapshot_Info snapshot_info;
