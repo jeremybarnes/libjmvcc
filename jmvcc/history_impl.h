@@ -157,7 +157,7 @@ cleanup(Epoch unneeded_epoch, const Versioned_Object * obj, Epoch trigger_epoch)
                 using namespace std;
                 cerr << "*** DESTROYING EARLIEST EPOCH FOR OBJECT "
                      << obj << endl;
-                backtrace();
+                //backtrace();
                 cerr << "  unneeded_epoch = " << unneeded_epoch << endl;
                 cerr << "  trigger_epoch = " << trigger_epoch << endl;
                 cerr << "  earliest_epoch = " << my_earliest_epoch << endl;
