@@ -194,6 +194,35 @@ cleanup(Epoch unneeded_epoch, const Versioned_Object * obj, Epoch trigger_epoch)
 template<typename T>
 void
 History<T>::
+rename(Epoch old_epoch, Epoch new_epoch)
+{
+    if (entries.empty())
+        throw Exception("renaming empty epoch");
+
+    // TODO: optimize
+    int i = 0;
+    for (typename Entries::iterator
+             it = entries.begin(),
+             end = entries.end();
+         it != end;  ++it, ++i) {
+            
+        if (it->epoch == old_epoch) {
+            if (i != 0 && boost::prior(it)->epoch >= new_epoch)
+                throw Exception("new epoch not ordered with respect to old");
+            if (i != size() - 1 && boost::next(it)->epoch <= new_epoch)
+                throw Exception("new epoch not ordered with respect to old 2");
+
+            it->epoch = new_epoch;
+            return;
+        }
+    }
+
+    throw Exception("attempt to rename something that didn't exist");
+}
+
+template<typename T>
+void
+History<T>::
 dump(std::ostream & stream, int indent) const
 {
     using namespace std;

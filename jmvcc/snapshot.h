@@ -98,9 +98,11 @@ private:
     typedef ACE_Mutex Mutex;
     mutable Mutex lock;
 
+    typedef std::vector<std::pair<Versioned_Object *, Epoch> > Cleanups;
+
     struct Entry {
         std::set<Snapshot *> snapshots;
-        std::vector<std::pair<Versioned_Object *, Epoch> > cleanups;
+        Cleanups cleanups;
     };
 
     typedef std::map<Epoch, Entry> Entries;
@@ -118,7 +120,7 @@ private:
     void validate_unlocked() const;
 
     void perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard);
-
+    
     friend class ::test0;
 };
 
@@ -165,6 +167,8 @@ struct Snapshot : boost::noncopyable {
     Epoch epoch() const { return epoch_; }
 
     int retries() const { return retries_; }
+
+    void rename_epoch(Epoch old_epoch, Epoch new_epoch);
 
 private:
     friend class Snapshot_Info;

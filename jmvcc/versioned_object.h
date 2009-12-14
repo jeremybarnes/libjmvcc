@@ -38,6 +38,9 @@ struct Versioned_Object {
     // Clean up an unused version
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch) = 0;
     
+    // Rename an epoch to a different number
+    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) = 0;
+
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 
     virtual void dump_unlocked(std::ostream & stream = std::cerr,

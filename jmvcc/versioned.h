@@ -90,7 +90,8 @@ struct Versioned : public Versioned_Object {
 private:
     // Implement object interface
 
-    History<T> history;
+    T * current;         ///< Current value
+    History<T> history;  ///< History of older values with epoch
     mutable Mutex lock;
 
 public:
@@ -119,6 +120,12 @@ public:
     {
         ACE_Guard<Mutex> guard(lock);
         history.cleanup(unused_epoch, this, trigger_epoch);
+    }
+
+    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch)
+    {
+        ACE_Guard<Mutex> guard(lock);
+        history.rename(old_epoch, new_epoch);
     }
 
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const

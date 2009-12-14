@@ -49,6 +49,10 @@ struct History {
 
     /// Clean up the entry for an unneeded epoch
     void cleanup(Epoch unneeded_epoch, const Versioned_Object * obj, Epoch trigger_epoch);
+
+    /// Change an epoch number
+    void rename(Epoch old_epoch, Epoch new_epoch);
+
     void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 
 private:

@@ -5,6 +5,8 @@
 
 #include "snapshot.h"
 #include "transaction.h"
+#include "utils/pair_utils.h"
+
 
 using namespace std;
 
@@ -434,6 +436,51 @@ compress_epochs()
 
        Later on, it may be possible to avoid taking the commit lock.
     */
+
+    // TODO: must have strong exception guarantee here, but it needs to be
+    // implemented
+
+    int i = 0;
+    for (Entries::iterator it = entries.begin(), end = entries.end();
+         it != end;  ++it, ++i) {
+        int old_epoch = it->first;
+        int new_epoch = i;
+
+        if (new_epoch >= old_epoch)
+            throw Exception("logic error in compress_epochs()");
+        
+        Entry & entry = it->second;
+
+        if (old_epoch == new_epoch) continue;  // nothing to do
+
+        /* The cleanup list points to all things that need to be in this
+           epoch. */
+        for (Cleanups::iterator
+                 jt = entry.cleanups.begin(),
+                 jend = entry.cleanups.end();
+             jt != jend;  ++jt) {
+            Versioned_Object * obj = jt->first;
+            size_t epoch = jt->second;
+
+            // TODO: if this throws?
+            obj->rename_epoch(epoch, new_epoch);
+
+            // Put it back in the cleanup list with the new epoch
+            jt->second = new_epoch;
+        }
+
+        // Make sure writes are visible before we continue
+        __sync_synchronize();
+
+        for (set<Snapshot *>::iterator
+                 jt = entry.snapshots.begin(),
+                 jend = entry.snapshots.end();
+             jt != jend;  ++jt)
+            (*jt)->rename_epoch(old_epoch, new_epoch);
+
+        // Make sure writes are visible before we continue
+        __sync_synchronize();
+    }
 }
 
 void
@@ -504,6 +551,15 @@ std::ostream & operator << (std::ostream & stream, const Status & status)
     case FAILED:        return stream << "FAILED";
     default:            return stream << ML::format("Status(%d)", status);
     }
+}
+
+void
+Snapshot::
+rename_epoch(Epoch old_epoch, Epoch new_epoch)
+{
+    if (epoch_ != old_epoch)
+        throw Exception("wrong old epoch");
+    epoch_ = new_epoch;
 }
 
 } // namespace JMVCC
