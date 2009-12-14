@@ -440,7 +440,7 @@ compress_epochs()
     // TODO: must have strong exception guarantee here, but it needs to be
     // implemented
 
-    int i = 0;
+    int i = 1; // starting epoch number
     for (Entries::iterator it = entries.begin(), end = entries.end();
          it != end;  ++it, ++i) {
         int old_epoch = it->first;
@@ -481,6 +481,9 @@ compress_epochs()
         // Make sure writes are visible before we continue
         __sync_synchronize();
     }
+
+    current_epoch_ = i;
+    earliest_epoch_ = 1;
 }
 
 void

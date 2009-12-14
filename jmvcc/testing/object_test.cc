@@ -24,7 +24,6 @@
 #include "arch/timers.h"
 #include "arch/backtrace.h"
 #include <sched.h>
-#include "jmvcc/history.h"
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"
 
@@ -45,7 +44,7 @@ BOOST_AUTO_TEST_CASE( test0 )
     Versioned<int> myval(6);
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
-    BOOST_CHECK_EQUAL(myval.history_size(), 1);
+    BOOST_CHECK_EQUAL(myval.history_size(), 0);
     BOOST_CHECK_EQUAL(myval.read(), 6);
     
     {
@@ -55,7 +54,7 @@ BOOST_AUTO_TEST_CASE( test0 )
     }
 
     // Check strong exception safety
-    BOOST_CHECK_EQUAL(myval.history_size(), 1);
+    BOOST_CHECK_EQUAL(myval.history_size(), 0);
     BOOST_CHECK_EQUAL(myval.read(), 6);
 
     cerr << "------------------ at start" << endl;
@@ -68,7 +67,7 @@ BOOST_AUTO_TEST_CASE( test0 )
         
         cerr << "&trans1 = " << &trans1 << endl;
 
-        BOOST_CHECK_EQUAL(myval.history_size(), 1);
+        BOOST_CHECK_EQUAL(myval.history_size(), 0);
         BOOST_CHECK_EQUAL(myval.read(), 6);
         
         // Check that the snapshot is properly there
@@ -107,7 +106,7 @@ BOOST_AUTO_TEST_CASE( test0 )
     snapshot_info.dump();
     cerr << "------------------ end at end" << endl;
 
-    BOOST_CHECK_EQUAL(myval.history_size(), 1);
+    BOOST_CHECK_EQUAL(myval.history_size(), 0);
     BOOST_CHECK_EQUAL(myval.read(), 6);
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
     BOOST_CHECK_EQUAL(get_current_epoch(), starting_epoch + 1);
@@ -269,6 +268,7 @@ void object_test_thread(Versioned<int> & var, int iter,
             ++errors;
             cerr << "no progress made: " << new_val << " <= " << old_val
                  << endl;
+            var.dump();
         }
         //BOOST_CHECK(var.read() > old_val);
     }
@@ -315,7 +315,7 @@ void run_object_test(int nthreads, int niter)
              << val.history.entries[i].value << endl;
 #endif
 
-    BOOST_CHECK_EQUAL(val.history_size(), 1);
+    BOOST_CHECK_EQUAL(val.history_size(), 0);
     BOOST_CHECK_EQUAL(val.read(), niter * nthreads * 2);
 }
 
@@ -345,7 +345,7 @@ struct Object_Test_Thread2 {
           failures(failures)
     {
     }
-
+    
     void operator () ()
     {
         // Wait for all threads to start up before we continue
@@ -419,9 +419,9 @@ void run_object_test2(int nthreads, int niter, int nvals)
 
     BOOST_CHECK_EQUAL(total, 0);
     for (unsigned i = 0;  i < nvals;  ++i) {
-        if (vals[i].history_size() != 1)
+        if (vals[i].history_size() != 0)
             vals[i].dump();
-        BOOST_CHECK_EQUAL(vals[i].history_size(), 1);
+        BOOST_CHECK_EQUAL(vals[i].history_size(), 0);
     }
 }
 
