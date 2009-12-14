@@ -35,13 +35,11 @@ struct Versioned : public Versioned_Object {
     Versioned()
     {
         current = new_entry(get_current_epoch(), T());
-        //history.push_back(new_entry(get_current_epoch(), T()));
     }
     
     explicit Versioned(const T & val)
     {
         current = new_entry(get_current_epoch(), val);
-        //history.push_back(new_entry(get_current_epoch(), val));
     }
 
     ~Versioned()
@@ -86,8 +84,6 @@ struct Versioned : public Versioned_Object {
         if (!current_trans) {
             ACE_Guard<Mutex> guard(lock);
             return value_at_epoch(get_current_epoch());
-            //return *current.value;
-            //return *history.back().value;
         }
         
         const T * val = current_trans->local_value<T>(this);
@@ -99,7 +95,6 @@ struct Versioned : public Versioned_Object {
     }
 
     size_t history_size() const { return history.size(); }
-    //size_t history_size() const { return history.size() - 1; }
 
 private:
     // This structure provides a list of values.  Each one is tagged with the
@@ -213,9 +208,6 @@ public:
         if (current.valid_from > old_epoch)
             return false;  // something updated before us
 
-        //if (history.back().valid_from > old_epoch)
-        //    return false;
-
         // We have to allocate the extra space in the history as nothing is
         // allowed to fail in the commit or rollback.  We won't read from this
         // entry as its epoch is higher than the current epoch.
@@ -232,11 +224,9 @@ public:
         // 1.  We transfer the new value we added to the current value;
         // 2.  We cleanup the first value on the history list
         ACE_Guard<Mutex> guard(lock);
-        //std::swap(history.back(), current);
 
         // Register the new history entry to be cleaned up
         snapshot_info.register_cleanup(this, history.back().valid_from);
-        //snapshot_info.register_cleanup(this, history[-2].valid_from);
     }
 
     virtual void rollback(Epoch new_epoch, void * data) throw ()
@@ -315,6 +305,11 @@ public:
     virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch)
     {
         ACE_Guard<Mutex> guard(lock);
+
+        if (current.valid_from == old_epoch) {
+            current.valid_from = new_epoch;
+            return;
+        }
 
         if (history.empty())
             throw Exception("renaming empty epoch");

@@ -94,6 +94,14 @@ struct Snapshot_Info {
 
     size_t entry_count() const { return entries.size(); }
 
+    /** Compress a range of epochs to remove holes from the epoch space and
+        start back at zero.  Used once the epochs start to get too high:
+        we can't allow a wrap around, and we would prefer not to use
+        64 bits.
+    */
+    void compress_epochs();
+
+
 private:
     typedef ACE_Mutex Mutex;
     mutable Mutex lock;
@@ -107,13 +115,6 @@ private:
 
     typedef std::map<Epoch, Entry> Entries;
     Entries entries;
-
-    /** Compress a range of epochs to remove holes from the epoch space and
-        start back at zero.  Used once the epochs start to get too high:
-        we can't allow a wrap around, and we would prefer not to use
-        64 bits.
-    */
-    void compress_epochs();
 
     void dump_unlocked(std::ostream & stream = std::cerr);
 

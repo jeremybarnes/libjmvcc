@@ -446,12 +446,15 @@ compress_epochs()
         int old_epoch = it->first;
         int new_epoch = i;
 
-        if (new_epoch >= old_epoch)
+        if (old_epoch == new_epoch) continue;  // nothing to do
+
+        if (new_epoch > old_epoch) {
+            cerr << "new_epoch = " << new_epoch << endl;
+            cerr << "old_epoch = " << old_epoch << endl;
             throw Exception("logic error in compress_epochs()");
+        }
         
         Entry & entry = it->second;
-
-        if (old_epoch == new_epoch) continue;  // nothing to do
 
         /* The cleanup list points to all things that need to be in this
            epoch. */
