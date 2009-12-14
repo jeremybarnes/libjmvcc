@@ -365,13 +365,22 @@ struct Object_Test_Thread2 {
                 
                 // Now that we're inside, the total should be zero
                 ssize_t total = 0;
+
                 for (unsigned i = 0;  i < nvars;  ++i)
                     total += vars[i].read();
+
                 if (total != 0) {
+                    ACE_Guard<ACE_Mutex> guard(commit_lock);
+                    cerr << "--------------- total not zero" << endl;
+                    snapshot_info.dump();
                     cerr << "total is " << total << endl;
+                    cerr << "trans.epoch() = " << trans.epoch() << endl;
                     ++errors;
+                    for (unsigned i = 0;  i < nvars;  ++i)
+                        vars[i].dump();
+                    cerr << "--------------- end total not zero" << endl;
                 }
-                
+
                 int & val1 = vars[var1].mutate();
                 int & val2 = vars[var2].mutate();
                     

@@ -34,19 +34,19 @@ struct Versioned : public Versioned_Object {
     
     Versioned()
     {
-        //current = new_entry(get_current_epoch(), T());
-        history.push_back(new_entry(get_current_epoch(), T()));
+        current = new_entry(get_current_epoch(), T());
+        //history.push_back(new_entry(get_current_epoch(), T()));
     }
     
     explicit Versioned(const T & val)
     {
-        //current = new_entry(get_current_epoch(), val);
-        history.push_back(new_entry(get_current_epoch(), val));
+        current = new_entry(get_current_epoch(), val);
+        //history.push_back(new_entry(get_current_epoch(), val));
     }
 
     ~Versioned()
     {
-        //cleanup_entry(current);
+        cleanup_entry(current);
         for (typename History::iterator
                  it = history.begin(),
                  end = history.end();
@@ -85,8 +85,9 @@ struct Versioned : public Versioned_Object {
     {
         if (!current_trans) {
             ACE_Guard<Mutex> guard(lock);
+            return value_at_epoch(get_current_epoch());
             //return *current.value;
-            return *history.back().value;
+            //return *history.back().value;
         }
         
         const T * val = current_trans->local_value<T>(this);
@@ -97,8 +98,8 @@ struct Versioned : public Versioned_Object {
         return value_at_epoch(current_trans->epoch());
     }
 
-    //size_t history_size() const { return history.size(); }
-    size_t history_size() const { return history.size() - 1; }
+    size_t history_size() const { return history.size(); }
+    //size_t history_size() const { return history.size() - 1; }
 
 private:
     // This structure provides a list of values.  Each one is tagged with the
@@ -123,15 +124,15 @@ private:
 
     typedef ML::Circular_Buffer<Entry> History;
 
-    //Entry current;       ///< Current value
+    Entry current;       ///< Current value
     History history;     ///< History of older values with epoch
     mutable Mutex lock;
 
     /// Return the value for the given epoch
     const T & value_at_epoch(Epoch epoch) const
     {
-        //if (epoch >= current.valid_from)
-        //    return *current.value;
+        if (epoch >= current.valid_from)
+            return *current.value;
 
         for (int i = history.size() - 1;  i >= 0;  --i)
             if (epoch >= history[i].valid_from)
@@ -209,17 +210,19 @@ public:
         if (new_epoch <= get_current_epoch())
             throw Exception("epochs out of order");
 
-        //if (current.valid_from > old_epoch)
-        //    return false;  // something updated before us
+        if (current.valid_from > old_epoch)
+            return false;  // something updated before us
 
-        if (history.back().valid_from > old_epoch)
-            return false;
+        //if (history.back().valid_from > old_epoch)
+        //    return false;
 
         // We have to allocate the extra space in the history as nothing is
         // allowed to fail in the commit or rollback.  We won't read from this
         // entry as its epoch is higher than the current epoch.
-        history.push_back(new_entry(new_epoch, *reinterpret_cast<T *>(data)));
-    
+        //history.push_back(new_entry(new_epoch, *reinterpret_cast<T *>(data)));
+        history.push_back(current);
+        current = new_entry(new_epoch, *reinterpret_cast<T *>(data));
+
         return true;
     }
 
@@ -232,16 +235,20 @@ public:
         //std::swap(history.back(), current);
 
         // Register the new history entry to be cleaned up
-        //snapshot_info.register_cleanup(this, history.back().valid_from);
-        snapshot_info.register_cleanup(this, history[-2].valid_from);
+        snapshot_info.register_cleanup(this, history.back().valid_from);
+        //snapshot_info.register_cleanup(this, history[-2].valid_from);
     }
 
     virtual void rollback(Epoch new_epoch, void * data) throw ()
     {
         // Reverse the setup
         ACE_Guard<Mutex> guard(lock);
-        cleanup_entry(history.back());
+        cleanup_entry(current);
+        current = history.back();
         history.pop_back();
+
+        //cleanup_entry(history.back());
+        //history.pop_back();
     }
 
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
@@ -275,8 +282,6 @@ public:
                     cerr << "  earliest_epoch = " << my_earliest_epoch << endl;
                     cerr << "  OBJECT SHOULD BE DESTROYED AT EPOCH "
                          << my_earliest_epoch << endl;
-                    //cerr << "  current_trans = " << current_trans << endl;
-                    //cerr << "  current_trans epoch " << current_trans_epoch() << endl;
                     snapshot_info.dump();
                     dump_unlocked();
                     //throw Exception("destroying earliest epoch");
@@ -355,15 +360,15 @@ public:
         stream << s << "object at " << this << std::endl;
         stream << s << "history with " << history.size()
                << " values" << endl;
-        //stream << s << "  current: valid from " << current.valid_from
-        //       << " addr " << current.value << " value "
-        //       << *current.value << endl;
         for (unsigned i = 0;  i < history.size();  ++i) {
             stream << s << "  " << i << ": valid from " << history[i].valid_from;
             stream << " addr " << history[i].value;
             stream << " value " << *history[i].value;
             stream << endl;
         }
+        stream << s << "  current: valid from " << current.valid_from
+               << " addr " << current.value << " value "
+               << *current.value << endl;
     }
 
     virtual std::string print_local_value(void * val) const
