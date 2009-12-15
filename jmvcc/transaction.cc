@@ -35,9 +35,10 @@ Transaction::
 commit()
 {
     status = COMMITTING;
-    bool result = Sandbox::commit(epoch());
+    Epoch result = Sandbox::commit(epoch());
     status = result ? COMMITTED : FAILED;
     if (!result) restart();
+    set_epoch(result);
     return result;
 }
 

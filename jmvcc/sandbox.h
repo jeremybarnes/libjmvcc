@@ -82,7 +82,9 @@ public:
         return local_value(const_cast<Versioned_Object *>(obj), initial_value);
     }
 
-    bool commit(Epoch old_epoch);
+    /** Commits the current transaction.  Returns zero if the transaction
+        failed, or returns the id of the new epoch if it succeeded. */
+    Epoch commit(Epoch old_epoch);
 
     void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 

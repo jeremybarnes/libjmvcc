@@ -37,10 +37,7 @@ restart()
 {
     status = RESTARTING;
     ++retries_;
-    if (get_current_epoch() != epoch_) {
-        snapshot_info.remove_snapshot(this);
-        register_me();
-    }
+    set_epoch(get_current_epoch());
 }
 
 inline
@@ -54,6 +51,17 @@ register_me()
         status = INITIALIZED;
     else if (status == RESTARTING)
         status = RESTARTED;
+}
+
+inline
+void
+Snapshot::
+set_epoch(Epoch new_epoch)
+{
+    if (new_epoch != epoch_) {
+        snapshot_info.remove_snapshot(this);
+        register_me();
+    }        
 }
 
 

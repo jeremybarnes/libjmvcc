@@ -36,7 +36,7 @@ clear()
     local_values.clear();
 }
 
-bool
+Epoch
 Sandbox::
 commit(Epoch old_epoch)
 {
@@ -85,7 +85,7 @@ commit(Epoch old_epoch)
     // TODO: clear as we go to better use cache
     clear();
         
-    return result;
+    return (result ? new_epoch : 0);
 }
 
 void

@@ -167,6 +167,8 @@ struct Snapshot : boost::noncopyable {
 
     Epoch epoch() const { return epoch_; }
 
+    void set_epoch(Epoch new_epoch);
+
     int retries() const { return retries_; }
 
     void rename_epoch(Epoch old_epoch, Epoch new_epoch);
