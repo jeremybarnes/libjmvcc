@@ -309,18 +309,19 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
     
     for (unsigned i = 0;  i < entry.cleanups.size();  ++i) {
         Versioned_Object * obj = entry.cleanups[i].first;
-        Epoch epoch = entry.cleanups[i].second;
+        Epoch valid_from = entry.cleanups[i].second;
         
         //cerr << "epoch = " << epoch << endl;
         
-        if (prev_epoch >= epoch && prev_snapshot) {
+        if (prev_epoch >= valid_from && prev_snapshot) {
             // still needed by prev snapshot
-            prev_snapshot->cleanups.push_back(make_pair(obj, epoch));
+            prev_snapshot->cleanups.push_back(make_pair(obj, valid_from));
         }
-        else entry.cleanups[num_to_cleanup++] = entry.cleanups[i]; // not needed anymore
+        else {
+            // not needed anymore
+            entry.cleanups[num_to_cleanup++] = entry.cleanups[i];
+        }
     }
-    
-    //debug << "num_to_cleanup = " << num_to_cleanup << endl;
     
     entry.cleanups.resize(num_to_cleanup);
     
@@ -339,12 +340,6 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
         Versioned_Object * obj = to_clean_up[i].first;
         Epoch epoch = to_clean_up[i].second;
         
-        //debug << "cleaning up object " << obj << " with unneeded epoch "
-        //      << epoch << endl;
-        
-        //ostringstream obj_stream_before;
-        //obj->dump(obj_stream_before);
-        
         try {
             obj->cleanup(epoch, snapshot_epoch);
         }
@@ -352,13 +347,10 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
             ostringstream obj_stream;
             obj->dump(obj_stream);
             cerr << "got exception: " << exc.what() << endl;
-            //cerr << debug.str();
-            //cerr << "object before cleanup: " << endl;
-            //cerr << obj_stream_before.str();
             cerr << "object after cleanup: " << endl;
             cerr << obj_stream.str();
-            //abort();  // let execution continue; see if this causes an error
-        }
+            throw;
+       }
     }
 }
 
@@ -497,7 +489,9 @@ dump_unlocked(std::ostream & stream)
     stream << "global state: " << endl;
     stream << "  current_epoch: " << get_current_epoch() << endl;
     stream << "  earliest_epoch: " << get_earliest_epoch() << endl;
-    stream << "  current_trans: " << current_trans << endl;
+    stream << "  current_trans: " << current_trans << " epoch "
+           << (current_trans ? current_trans->epoch() : 0)
+           << endl;
     stream << "  snapshot epochs: " << entries.size() << endl;
     int i = 0;
     for (map<Epoch, Entry>::const_iterator
@@ -563,6 +557,9 @@ void
 Snapshot::
 rename_epoch(Epoch old_epoch, Epoch new_epoch)
 {
+    cerr << "epoch_ = " << epoch_ << endl;
+    cerr << "old_epoch = " << old_epoch << endl;
+    cerr << "new_epoch = " << new_epoch << endl;
     if (epoch_ != old_epoch)
         throw Exception("wrong old epoch");
     epoch_ = new_epoch;

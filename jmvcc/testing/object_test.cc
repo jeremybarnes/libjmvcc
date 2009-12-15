@@ -267,7 +267,7 @@ void object_test_thread(Versioned<int> & var, int iter,
         if (new_val <= old_val) {
             ++errors;
             cerr << "no progress made: " << new_val << " <= " << old_val
-                 << endl;
+                 << " current_epoch " << get_current_epoch() << endl ;
             var.dump();
         }
         //BOOST_CHECK(var.read() > old_val);

@@ -32,19 +32,17 @@ template<typename T>
 struct Versioned : public Versioned_Object {
     typedef ACE_Mutex Mutex;
     
-    Versioned()
+    explicit Versioned(const T & val = T())
     {
-        current = new_entry(get_current_epoch(), T());
-    }
-    
-    explicit Versioned(const T & val)
-    {
-        current = new_entry(get_current_epoch(), val);
+        Entry entry = new_entry(0, val);
+        current = entry.value;
+        //valid_from = 0;
     }
 
     ~Versioned()
     {
-        cleanup_entry(current);
+        Entry entry(0, current);
+        cleanup_entry(entry);
         for (typename History::iterator
                  it = history.begin(),
                  end = history.end();
@@ -103,53 +101,42 @@ private:
     // latest epoch.
 
     struct Entry {
-        Entry()
-            : valid_from(0), value(0)
+        explicit Entry(Epoch valid_to = 0, T * value = 0)
+            : valid_to(valid_to), value(value)
         {
         }
 
-        Entry(Epoch valid_from, T * value)
-            : valid_from(valid_from), value(value)
-        {
-        }
-
-        Epoch valid_from;
+        Epoch valid_to;
         T * value;
     };
 
     typedef ML::Circular_Buffer<Entry> History;
 
-    Entry current;       ///< Current value
+    T * current;         ///< Current value
+    //Epoch valid_from;    ///< Equal to the valid_to of history.back()
     History history;     ///< History of older values with epoch
     mutable Mutex lock;
+
+    Epoch valid_from() const { return (history.empty() ? 0 : history.back().valid_to); }
 
     /// Return the value for the given epoch
     const T & value_at_epoch(Epoch epoch) const
     {
-        if (epoch >= current.valid_from)
-            return *current.value;
+        if (epoch >= valid_from())
+            return *current;
 
-        for (int i = history.size() - 1;  i >= 0;  --i)
-            if (epoch >= history[i].valid_from)
+        for (int i = history.size() - 1;  i > 0;  --i) {
+            Epoch valid_from = history[i - 1].valid_to;
+            if (epoch >= valid_from)
                 return *history[i].value;
-
-        using namespace std;
-        cerr << "--------------- expired epoch -------------" << endl;
-        cerr << "obj = " << this << endl;
-        cerr << "current_epoch = " << get_current_epoch() << endl;
-        cerr << "earliest_epoch = " << get_earliest_epoch() << endl;
-        cerr << "epoch = " << epoch << endl;
-        dump_unlocked();
-        snapshot_info.dump();
-        if (current_trans) current_trans->dump();
-        cerr << "--------------- end expired epoch" << endl;
-
-        throw Exception("attempt to obtain value for expired epoch");
+        }
+        
+        return *history.front().value;
     }
-
+    
     struct Entry_Holder {
-        Entry_Holder(Epoch epoch, T * value)
-            : entry(epoch, value), used(false)
+        Entry_Holder(Epoch valid_to, T * value)
+            : entry(valid_to, value), used(false)
         {
         }
 
@@ -172,7 +159,7 @@ private:
         mutable bool used;
     };
 
-    Entry_Holder new_entry(Epoch epoch, const T & initial)
+    Entry_Holder new_entry(Epoch valid_to, const T & initial)
     {
         T * value = allocator.allocate(1);
         try {
@@ -183,7 +170,7 @@ private:
             throw;
         }
 
-        return Entry_Holder(epoch, value);
+        return Entry_Holder(valid_to, value);
     }
 
     void cleanup_entry(const Entry & entry)
@@ -202,18 +189,19 @@ public:
     {
         ACE_Guard<Mutex> guard(lock);
 
-        if (new_epoch <= get_current_epoch())
+        if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
-        if (current.valid_from > old_epoch)
+        if (valid_from() > old_epoch)
             return false;  // something updated before us
 
         // We have to allocate the extra space in the history as nothing is
         // allowed to fail in the commit or rollback.  We won't read from this
         // entry as its epoch is higher than the current epoch.
-        //history.push_back(new_entry(new_epoch, *reinterpret_cast<T *>(data)));
-        history.push_back(current);
-        current = new_entry(new_epoch, *reinterpret_cast<T *>(data));
+        history.push_back(Entry(new_epoch, current));
+        //valid_from = new_epoch;
+        Entry entry = new_entry(0, *reinterpret_cast<T *>(data));
+        current = entry.value;
 
         return true;
     }
@@ -221,24 +209,23 @@ public:
     virtual void commit(Epoch new_epoch) throw ()
     {
         // Now that it's definitive, we perform the following:
-        // 1.  We transfer the new value we added to the current value;
-        // 2.  We cleanup the first value on the history list
+        // 1.  We cleanup the first value on the history list
         ACE_Guard<Mutex> guard(lock);
 
         // Register the new history entry to be cleaned up
-        snapshot_info.register_cleanup(this, history.back().valid_from);
+        Epoch valid_from = (history.size() > 1 ? history[-2].valid_to : 0);
+        snapshot_info.register_cleanup(this, valid_from);
     }
 
     virtual void rollback(Epoch new_epoch, void * data) throw ()
     {
         // Reverse the setup
         ACE_Guard<Mutex> guard(lock);
-        cleanup_entry(current);
-        current = history.back();
+        Entry entry(0, current);
+        cleanup_entry(entry);
+        current = history.back().value;
         history.pop_back();
-
-        //cleanup_entry(history.back());
-        //history.pop_back();
+        //valid_from = (history.empty() ? 0 : history.back().valid_to);
     }
 
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
@@ -248,46 +235,23 @@ public:
         if (history.empty())
             throw Exception("cleaning up with no values");
 
+        if (unused_epoch < history[0].valid_to) {
+            history.pop_front();
+            return;
+        }
+
         // TODO: optimize
-        int i = 0;
+        Epoch valid_from = 0;
         for (typename History::iterator
                  it = history.begin(),
                  end = history.end();
-             it != end;  ++it, ++i) {
-            
-            //if (i != std::distance(history.begin(), it))
-            //    throw Exception("distance is wrong");
+             it != end;  valid_from = it->valid_to, ++it) {
 
-            if (it->valid_from == unused_epoch) {
-                
-#if 0
-                Epoch my_earliest_epoch = get_earliest_epoch();
-                if (i == 0 && history[1].valid_from > my_earliest_epoch) {
-                    using namespace std;
-                    cerr << "*** DESTROYING EARLIEST EPOCH FOR OBJECT "
-                         << this << endl;
-                    //backtrace();
-                    cerr << "  unused_epoch = " << unused_epoch << endl;
-                    cerr << "  trigger_epoch = " << trigger_epoch << endl;
-                    cerr << "  earliest_epoch = " << my_earliest_epoch << endl;
-                    cerr << "  OBJECT SHOULD BE DESTROYED AT EPOCH "
-                         << my_earliest_epoch << endl;
-                    snapshot_info.dump();
-                    dump_unlocked();
-                    //throw Exception("destroying earliest epoch");
-                }
-#endif
-
-                //validate();
+            if (valid_from == unused_epoch) {
+                if (it != history.begin())
+                    boost::prior(it)->valid_to = it->valid_to;
                 cleanup_entry(*it);
                 history.erase(it);
-                //validate();
-
-#if 0
-                if (i == 0 && history.front().valid_from > my_earliest_epoch)
-                    throw Exception("destroying earliest epoch");
-#endif
-
                 return;
             }
         }
@@ -297,6 +261,8 @@ public:
         cerr << "----------- cleaning up didn't exist ---------" << endl;
         dump_unlocked();
         cerr << "unused_epoch = " << unused_epoch << endl;
+        cerr << "trigger_epoch = " << trigger_epoch << endl;
+        snapshot_info.dump();
         cerr << "----------- end cleaning up didn't exist ---------" << endl;
         
         throw Exception("attempt to clean up something that didn't exist");
@@ -306,13 +272,18 @@ public:
     {
         ACE_Guard<Mutex> guard(lock);
 
-        if (current.valid_from == old_epoch) {
-            current.valid_from = new_epoch;
+        if (history.empty()) return;
+#if 0
+        if (valid_from == old_epoch) {
+            valid_from = new_epoch;
+            if (history.size())
+                history.back().valid_to = new_epoch;
             return;
         }
 
         if (history.empty())
             throw Exception("renaming empty epoch");
+#endif
 
         // TODO: optimize
         int i = 0;
@@ -321,14 +292,16 @@ public:
                  end = history.end();
              it != end;  ++it, ++i) {
             
-            if (it->valid_from == old_epoch) {
-                if (i != 0 && boost::prior(it)->valid_from >= new_epoch)
-                    throw Exception("new epoch not ordered with respect to old");
+            if (it->valid_to == old_epoch) {
+                if (i != 0 && boost::prior(it)->valid_to >= new_epoch)
+                    throw Exception("new epoch not ordered with respect to "
+                                    "old");
                 if (i != history.size() - 1
-                    && boost::next(it)->valid_from <= new_epoch)
-                    throw Exception("new epoch not ordered with respect to old 2");
+                    && boost::next(it)->valid_to <= new_epoch)
+                    throw Exception("new epoch not ordered with respect to "
+                                    "old 2");
                 
-                it->valid_from = new_epoch;
+                it->valid_to = new_epoch;
                 return;
             }
         }
@@ -356,14 +329,14 @@ public:
         stream << s << "history with " << history.size()
                << " values" << endl;
         for (unsigned i = 0;  i < history.size();  ++i) {
-            stream << s << "  " << i << ": valid from " << history[i].valid_from;
+            stream << s << "  " << i << ": valid to " << history[i].valid_to;
             stream << " addr " << history[i].value;
             stream << " value " << *history[i].value;
             stream << endl;
         }
-        stream << s << "  current: valid from " << current.valid_from
-               << " addr " << current.value << " value "
-               << *current.value << endl;
+        stream << s << "  current: valid from " << valid_from()
+               << " addr " << current << " value "
+               << *current << endl;
     }
 
     virtual std::string print_local_value(void * val) const
@@ -376,7 +349,7 @@ public:
         ssize_t e = 0;  // epoch we are up to
         
         for (unsigned i = 0;  i < history.size();  ++i) {
-            Epoch e2 = history[i].valid_from;
+            Epoch e2 = history[i].valid_to;
             if (e2 > get_current_epoch() + 1) {
                 using namespace std;
                 cerr << "e = " << e << " e2 = " << e2 << endl;

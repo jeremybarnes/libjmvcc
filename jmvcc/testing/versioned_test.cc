@@ -111,6 +111,8 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     {
         current_trans = t2.get();
+        snapshot_info.dump();
+        var.dump();
         BOOST_CHECK_EQUAL(var.read(), 0);
         current_trans = 0;
     }
@@ -149,6 +151,8 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     {
         current_trans = t2.get();
+        snapshot_info.dump();
+        var.dump();
         BOOST_CHECK_EQUAL(var.read(), 0);
         current_trans = 0;
     }
