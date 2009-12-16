@@ -429,16 +429,26 @@ compress_epochs()
        Later on, it may be possible to avoid taking the commit lock.
     */
 
+    if (entries.empty())
+        return;
+
     // TODO: must have strong exception guarantee here, but it needs to be
     // implemented
 
+    cerr << "compress epochs: " << entries.size() << " entries" << endl;
+
     int i = 1; // starting epoch number
     for (Entries::iterator it = entries.begin(), end = entries.end();
-         it != end;  ++it, ++i) {
+         it != end;  /* no inc it */ ++i) {
         int old_epoch = it->first;
         int new_epoch = i;
 
-        if (old_epoch == new_epoch) continue;  // nothing to do
+        cerr << "renaming " << old_epoch << " to " << new_epoch << endl;
+
+        if (old_epoch == new_epoch) {
+            ++it;
+            continue;  // nothing to do
+        }
 
         if (new_epoch > old_epoch) {
             cerr << "new_epoch = " << new_epoch << endl;
@@ -452,12 +462,13 @@ compress_epochs()
            epoch. */
         for (Cleanups::iterator
                  jt = entry.cleanups.begin(),
+
                  jend = entry.cleanups.end();
              jt != jend;  ++jt) {
             Versioned_Object * obj = jt->first;
             size_t epoch = jt->second;
 
-            // TODO: if this throws?
+            // TODO: if this throws? (not allowed to)
             obj->rename_epoch(epoch, new_epoch);
 
             // Put it back in the cleanup list with the new epoch
@@ -467,6 +478,9 @@ compress_epochs()
         // Make sure writes are visible before we continue
         __sync_synchronize();
 
+        cerr << "renaming epochs" << endl;
+        dump_unlocked();
+
         for (set<Snapshot *>::iterator
                  jt = entry.snapshots.begin(),
                  jend = entry.snapshots.end();
@@ -475,6 +489,16 @@ compress_epochs()
 
         // Make sure writes are visible before we continue
         __sync_synchronize();
+
+        if (entries.count(new_epoch))
+            throw Exception("new epoch already there");
+        Entry & new_entry = entries[new_epoch];
+        new_entry.snapshots.swap(entry.snapshots);
+        new_entry.cleanups.swap(entry.cleanups);
+
+        Entries::iterator new_it = boost::next(it);
+        entries.erase(it);
+        it = new_it;
     }
 
     current_epoch_ = i;
@@ -557,6 +581,7 @@ void
 Snapshot::
 rename_epoch(Epoch old_epoch, Epoch new_epoch)
 {
+    cerr << "rename_epoch at " << this << endl;
     cerr << "epoch_ = " << epoch_ << endl;
     cerr << "old_epoch = " << old_epoch << endl;
     cerr << "new_epoch = " << new_epoch << endl;

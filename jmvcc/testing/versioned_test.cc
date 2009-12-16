@@ -144,12 +144,17 @@ BOOST_AUTO_TEST_CASE( test0 )
     
     // Delete transaction t1.  This should cause the value 1 to disappear.
 
+    cerr << "--------------------------------" << endl;
+    snapshot_info.dump();
+    var.dump();
+
     delete t1.release();
 
     BOOST_CHECK_EQUAL(var.read(), 2);
     BOOST_CHECK_EQUAL(var.history_size(), 1);
 
     {
+        cerr << "--------------------------------" << endl;
         current_trans = t2.get();
         snapshot_info.dump();
         var.dump();
@@ -181,4 +186,3 @@ BOOST_AUTO_TEST_CASE( test0 )
     BOOST_CHECK_EQUAL(var.read(), 2);
     BOOST_CHECK_EQUAL(var.history_size(), 0);
 }
-

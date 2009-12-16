@@ -39,7 +39,7 @@ struct Versioned_Object {
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch) = 0;
     
     // Rename an epoch to a different number
-    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) = 0;
+    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) throw () = 0;
 
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 

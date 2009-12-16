@@ -244,12 +244,13 @@ public:
         Epoch valid_from = 0;
         for (typename History::iterator
                  it = history.begin(),
+                 last,
                  end = history.end();
-             it != end;  valid_from = it->valid_to, ++it) {
+             it != end;  valid_from = it->valid_to, last = it, ++it) {
 
             if (valid_from == unused_epoch) {
-                if (it != history.begin())
-                    boost::prior(it)->valid_to = it->valid_to;
+                if (valid_from != 0)
+                    last->valid_to = it->valid_to;
                 cleanup_entry(*it);
                 history.erase(it);
                 return;
@@ -268,22 +269,18 @@ public:
         throw Exception("attempt to clean up something that didn't exist");
     }
     
-    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch)
+    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) throw ()
     {
         ACE_Guard<Mutex> guard(lock);
 
-        if (history.empty()) return;
-#if 0
-        if (valid_from == old_epoch) {
-            valid_from = new_epoch;
-            if (history.size())
-                history.back().valid_to = new_epoch;
+        if (history.empty())
+            throw Exception("renaming up with no values");
+        
+        if (old_epoch < history[0].valid_to) {
+            // The last one doesn't have a valid_from, so we assume that it's
+            // ok and leave it.
             return;
         }
-
-        if (history.empty())
-            throw Exception("renaming empty epoch");
-#endif
 
         // TODO: optimize
         int i = 0;
@@ -305,7 +302,12 @@ public:
                 return;
             }
         }
-        
+
+        using namespace std;
+        cerr << "---------------------" << endl;
+        cerr << "old_epoch = " << old_epoch << endl;
+        cerr << "new_epoch = " << new_epoch << endl;
+        dump_unlocked();
         throw Exception("attempt to rename something that didn't exist");
     }
 
