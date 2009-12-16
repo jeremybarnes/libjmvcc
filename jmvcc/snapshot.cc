@@ -435,7 +435,12 @@ compress_epochs()
     // TODO: must have strong exception guarantee here, but it needs to be
     // implemented
 
+    // TOOD: possible race condition with earliest_epoch(): when should it
+    // be modified?
+
     cerr << "compress epochs: " << entries.size() << " entries" << endl;
+
+    dump_unlocked();
 
     int i = 1; // starting epoch number
     for (Entries::iterator it = entries.begin(), end = entries.end();
@@ -466,10 +471,18 @@ compress_epochs()
                  jend = entry.cleanups.end();
              jt != jend;  ++jt) {
             Versioned_Object * obj = jt->first;
-            size_t epoch = jt->second;
+            size_t valid_from = jt->second;
+
+            cerr << "  object " << obj << " before renaming "
+                 << old_epoch << " to " << new_epoch << ":" << endl;
+            obj->dump(cerr, 4);
 
             // TODO: if this throws? (not allowed to)
-            obj->rename_epoch(epoch, new_epoch);
+            obj->rename_epoch(valid_from, new_epoch);
+
+            cerr << "  object " << obj << " after renaming "
+                 << old_epoch << " to " << new_epoch << ":" << endl;
+            obj->dump(cerr, 4);
 
             // Put it back in the cleanup list with the new epoch
             jt->second = new_epoch;
@@ -500,6 +513,9 @@ compress_epochs()
         entries.erase(it);
         it = new_it;
     }
+
+    cerr << "------------ finished renaming" << endl;
+    dump_unlocked();
 
     current_epoch_ = i;
     earliest_epoch_ = 1;

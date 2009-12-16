@@ -55,14 +55,15 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     BOOST_CHECK_EQUAL(var.read(), 0);
     BOOST_CHECK_EQUAL(t1->epoch(), 1);
-    BOOST_CHECK_EQUAL(get_current_epoch(), 1);
+    BOOST_CHECK_EQUAL(get_current_epoch(), 2);
+    BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
 
     delete t1.release();
 
     BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
 }
 
-BOOST_AUTO_TEST_CASE( test1 )
+void run_test(int test_num)
 {
     BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
     
@@ -76,9 +77,9 @@ BOOST_AUTO_TEST_CASE( test1 )
 
     auto_ptr<Transaction> t1(new Transaction());
     auto_ptr<Transaction> t2(new Transaction());
-    auto_ptr<Transaction> t2a(new Transaction());
+    auto_ptr<Transaction> t0(new Transaction());
 
-    BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 3);
+    BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 1);
 
     BOOST_CHECK_EQUAL(get_current_epoch(), 600);
     BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
@@ -96,7 +97,9 @@ BOOST_AUTO_TEST_CASE( test1 )
     }
 
     BOOST_CHECK_EQUAL(get_current_epoch(), 620);
-    BOOST_CHECK_EQUAL(get_earliest_epoch(), 620);
+    BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
+
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
 
     BOOST_CHECK_EQUAL(var.read(), 20);
     BOOST_CHECK_EQUAL(var.history_size(), 1);
@@ -128,8 +131,10 @@ BOOST_AUTO_TEST_CASE( test1 )
     BOOST_CHECK_EQUAL(var.read(), 40);
     BOOST_CHECK_EQUAL(var.history_size(), 2);
 
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
+
     BOOST_CHECK_EQUAL(get_current_epoch(), 640);
-    BOOST_CHECK_EQUAL(get_earliest_epoch(), 640);
+    BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
 
     auto_ptr<Transaction> t3(new Transaction());
 
@@ -149,22 +154,183 @@ BOOST_AUTO_TEST_CASE( test1 )
         current_trans = 0;
     }
     
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    BOOST_CHECK_EQUAL(var.read(), 60);
     BOOST_CHECK_EQUAL(var.history_size(), 3);
 
+    BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 4);
+
     BOOST_CHECK_EQUAL(get_current_epoch(), 660);
-    BOOST_CHECK_EQUAL(get_earliest_epoch(), 660);
+    BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
+
+    if (test_num > 2) {
+        BOOST_CHECK_NO_THROW(snapshot_info.compress_epochs());
+        BOOST_CHECK_EQUAL(get_current_epoch(), 5);
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
+        BOOST_CHECK_EQUAL(t0->epoch(), 1);
+        BOOST_CHECK_EQUAL(t1->epoch(), 2);
+        BOOST_CHECK_EQUAL(t2->epoch(), 3);
+        BOOST_CHECK_EQUAL(t3->epoch(), 4);
+
+        cerr << "------------ var after renaming" << endl;
+        var.dump();
+        cerr << "------------ end var after renaming" << endl;
+    }
+
+
 
     {
         current_trans = t1.get();
-        BOOST_CHECK_EQUAL(var.read(), 1);
+        BOOST_CHECK_EQUAL(var.read(), 20);
         current_trans = 0;
     }
 
-    delete t2a.release();
-    delete t2.release();
-    delete t1.release();
-    delete t3.release();
+    {
+        current_trans = t2.get();
+        BOOST_CHECK_EQUAL(var.read(), 40);
+        current_trans = 0;
+    }
+
+    {
+        current_trans = t3.get();
+        BOOST_CHECK_EQUAL(var.read(), 60);
+        current_trans = 0;
+    }
+
+    {
+        current_trans = t0.get();
+        BOOST_CHECK_EQUAL(var.read(), 0);
+        current_trans = 0;
+    }
+
+    if (test_num == 1) {
+        delete t0.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 620);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
+        BOOST_CHECK_EQUAL(var.history_size(), 2);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+        
+        delete t1.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 640);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
+        BOOST_CHECK_EQUAL(var.history_size(), 1);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t2.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 660);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
+        BOOST_CHECK_EQUAL(var.history_size(), 0);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t3.release();
+
+        BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        return;
+    }
+
+    if (test_num == 2) {
+        delete t3.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
+        BOOST_CHECK_EQUAL(var.history_size(), 3);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t2.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
+        BOOST_CHECK_EQUAL(var.history_size(), 2);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t1.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
+        BOOST_CHECK_EQUAL(var.history_size(), 1);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t0.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 660);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
+        BOOST_CHECK_EQUAL(var.history_size(), 0);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
+
+        return;
+    }
+
+    if (test_num == 3) {
+        delete t0.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 2);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
+        BOOST_CHECK_EQUAL(var.history_size(), 2);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+        
+        delete t1.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 3);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
+        BOOST_CHECK_EQUAL(var.history_size(), 1);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t2.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 4);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
+        BOOST_CHECK_EQUAL(var.history_size(), 0);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t3.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 5);
+        BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        return;
+    }
+
+    if (test_num == 4) {
+        delete t3.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
+        BOOST_CHECK_EQUAL(var.history_size(), 3);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t2.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
+        BOOST_CHECK_EQUAL(var.history_size(), 2);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t1.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
+        BOOST_CHECK_EQUAL(var.history_size(), 1);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        delete t0.release();
+
+        BOOST_CHECK_EQUAL(get_earliest_epoch(), 5);
+        BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
+        BOOST_CHECK_EQUAL(var.history_size(), 0);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+
+        BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
+
+        return;
+    }
+
 
 #if 0
     snapshot_info.compress_epochs();
@@ -172,7 +338,7 @@ BOOST_AUTO_TEST_CASE( test1 )
 
     // Deleting this transaction shouldn't cause anything to disappear as
     // there is another (t2) with the same epoch
-    delete t2a.release();
+    delete t0.release();
 
     BOOST_CHECK_EQUAL(var.read(), 2);
     BOOST_CHECK_EQUAL(var.history_size(), 2);
@@ -241,6 +407,26 @@ BOOST_AUTO_TEST_CASE( test1 )
 #endif
 
     BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
+}
+
+BOOST_AUTO_TEST_CASE( test1 )
+{
+    run_test(1);
+}
+
+BOOST_AUTO_TEST_CASE( test2 )
+{
+    run_test(2);
+}
+
+BOOST_AUTO_TEST_CASE( test3 )
+{
+    run_test(3);
+}
+
+BOOST_AUTO_TEST_CASE( test4 )
+{
+    run_test(3);
 }
 
 
