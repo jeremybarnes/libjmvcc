@@ -192,9 +192,6 @@ public:
         if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
-        //using namespace std;
-        //cerr << "old: valid_from() = " << valid_from() << endl;
-
         if (valid_from() > old_epoch)
             return false;  // something updated before us
 

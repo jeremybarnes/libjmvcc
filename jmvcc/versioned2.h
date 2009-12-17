@@ -13,9 +13,6 @@
 
 namespace JMVCC {
 
-#define out_of_sync(x, y) __out_of_sync(__FILE__, __LINE__, #x, #y, x, y)
-#define check_equivalent() __check_equivalent(__FILE__, __LINE__)
-
 /*****************************************************************************/
 /* VERSIONED                                                                 */
 /*****************************************************************************/
@@ -34,7 +31,6 @@ struct Versioned2 : public Versioned_Object {
     typedef ACE_Mutex Mutex;
     
     explicit Versioned2(const T & val = T())
-        : old(val)
     {
         data = new_data(val, 1);
     }
@@ -55,9 +51,6 @@ struct Versioned2 : public Versioned_Object {
             {
                 ACE_Guard<ACE_Mutex> guard(wlock);
                 value = data->value_at_epoch(current_trans->epoch());
-                T value2 = old.value_at_epoch(current_trans->epoch());
-                if (value != value2)
-                    out_of_sync(value, value2);
             }
             local = current_trans->local_value<T>(this, value);
             
@@ -78,9 +71,6 @@ struct Versioned2 : public Versioned_Object {
         if (!current_trans) {
             ACE_Guard<ACE_Mutex> guard(wlock);
             T result = data->value_at_epoch(get_current_epoch());
-            T result2 = old.value_at_epoch(get_current_epoch());
-            if (result != result2)
-                out_of_sync(result, result2);
             return result;
         }
         const T * val = current_trans->local_value<T>(this);
@@ -89,9 +79,6 @@ struct Versioned2 : public Versioned_Object {
         
         ACE_Guard<ACE_Mutex> guard(wlock);
         T result = data->value_at_epoch(current_trans->epoch());
-        T result2 = old.value_at_epoch(current_trans->epoch());
-        if (result != result2)
-            out_of_sync(result, result2);
         return result;
     }
 
@@ -234,8 +221,6 @@ private:
     // The single internal data member.  Updated atomically.
     Data * data;
 
-    Versioned<T> old;
-
     mutable ACE_Mutex wlock;
 
     static void delete_data(Data * data)
@@ -289,10 +274,6 @@ public:
     {
         ACE_Guard<ACE_Mutex> guard(wlock);
 
-        check_equivalent();
-
-        bool result2 = old.setup(old_epoch, new_epoch, new_value);
-
         if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
@@ -300,17 +281,8 @@ public:
         if (data->size() > 1)
             valid_from = data->element(data->size() - 2).valid_to;
 
-        //using namespace std;
-        //cerr << "valid_from = " << valid_from << endl;
-
-        if (valid_from > old_epoch) {
-            if (result2 != false)
-                out_of_sync(result2, false);
+        if (valid_from > old_epoch)
             return false;  // something updated before us
-        }
-
-        if (result2 != true)
-            out_of_sync(result2, true);
 
         Data * new_data = data->copy(data->size() + 1);
         new_data->back().valid_to = new_epoch;
@@ -318,11 +290,6 @@ public:
                                   *reinterpret_cast<T *>(new_value)));
         
         set_data(new_data);
-
-        if (result2 != true)
-            out_of_sync(result2, true);
-
-        check_equivalent();
 
         return true;
     }
@@ -336,11 +303,6 @@ public:
         if (data->size() > 2)
             valid_from = data->element(data->size() - 3).valid_to;
 
-
-        Epoch result2 = old.fake_commit(new_epoch);
-        if (result2 != valid_from)
-            out_of_sync(result2, valid_from);
-
         snapshot_info.register_cleanup(this, valid_from);
     }
 
@@ -348,22 +310,14 @@ public:
     {
         ACE_Guard<ACE_Mutex> guard(wlock);
 
-        check_equivalent();
-
         data->pop_back();
         data->back().valid_to = 1;  // probably unnecessary...
-
-        old.rollback(new_epoch, local_data);
-        check_equivalent();
     }
 
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
     {
         ACE_Guard<ACE_Mutex> guard(wlock);
         
-        check_equivalent();
-        old.cleanup(unused_epoch, trigger_epoch);
-
         if (data->size() < 2)
             throw Exception("cleaning up with no values to clean up");
 
@@ -426,14 +380,8 @@ public:
             }
             set_data(data2);
 
-            check_equivalent();
-    
-            //dump_unlocked();
-
             return;
         }
-
-        check_equivalent();
 
         static Lock lock;
         Guard guard2(lock);
@@ -547,52 +495,6 @@ public:
             e = e2;
         }
 #endif
-    }
-
-    template<typename T1, typename T2>
-    void __out_of_sync(const char * file, int line,
-                       const char * name1, const char * name2,
-                       T1 val1, T2 val2) const
-    {
-        using namespace std;
-        static Lock lock;
-        Guard guard(lock);
-
-        cerr << "at file " << file << ":" << line << endl;
-        cerr << name1 << " != " << name2 << ": " << val1 << " != "
-             << val2 << endl;
-
-        cerr << "me: " << endl;
-        dump_unlocked();
-        cerr << "old: " << endl;
-        old.dump_unlocked();
-
-        throw Exception("out of sync");
-    }
-
-    void __check_equivalent(const char * file, int line) const
-    {
-        if (history_size() != old.history_size())
-            __out_of_sync(file, line, "history_size()", "old.history_size()",
-                          history_size(), old.history_size());
-
-        for (unsigned i = 0;  i < data->size() - 1;  ++i) {
-            if (data->element(i).valid_to != old.history[i].valid_to)
-                __out_of_sync(file, line, "history", "history",
-                              data->element(i).valid_to,
-                              old.history[i].valid_to);
-
-            if (data->element(i).value != *old.history[i].value)
-                __out_of_sync(file, line, "value", "value",
-                              data->element(i).value,
-                              *old.history[i].value);
-        }
-
-        if (data->back().value != *old.current)
-            __out_of_sync(file, line, "current value", "current value",
-                          data->back().value,
-                          *old.current);
-            
     }
 };
 
