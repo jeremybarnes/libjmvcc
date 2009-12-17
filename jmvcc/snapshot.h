@@ -101,6 +101,10 @@ struct Snapshot_Info {
     */
     void compress_epochs();
 
+    /** For testing.  Check if the given epoch has the given object in it,
+        and returns the valid_from of that object.  Slow and inefficient. */
+    Epoch has_cleanup(Epoch snapshot_epoch,
+                      const Versioned_Object * object) const;
 
 private:
     typedef ACE_Mutex Mutex;

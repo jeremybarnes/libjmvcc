@@ -570,6 +570,25 @@ validate_unlocked() const
     
 }
 
+Epoch
+Snapshot_Info::
+has_cleanup(Epoch snapshot_epoch, const Versioned_Object * object) const
+{
+    ACE_Guard<Mutex> guard (lock);
+    Entries::const_iterator it = entries.find(snapshot_epoch);
+
+    if (it == entries.end()) return 0;
+
+    for (Cleanups::const_iterator
+             jt = it->second.cleanups.begin(),
+             jend = it->second.cleanups.end();
+         jt != jend;  ++jt)
+        if (jt->first == object)
+            return jt->second;
+
+    return 0;
+}
+
 
 /*****************************************************************************/
 /* SNAPSHOT                                                                  */

@@ -32,7 +32,7 @@ struct Versioned2 : public Versioned_Object {
     
     explicit Versioned2(const T & val = T())
     {
-        data = new_data(val);
+        data = new_data(val, 1);
     }
 
     ~Versioned2()
@@ -81,7 +81,7 @@ private:
     // latest epoch.
 
     struct Entry {
-        explicit Entry(Epoch valid_to = 0, const T & value = T())
+        explicit Entry(Epoch valid_to = 1, const T & value = T())
             : valid_to(valid_to), value(value)
         {
         }
@@ -211,12 +211,20 @@ private:
         // For the moment, we leak, until we get GC working
     }
 
-    static Data * new_data(const T & val, size_t capacity = 1)
+    static Data * new_data(size_t capacity)
     {
         // TODO: exception safety...
         void * d = malloc(sizeof(Data) + capacity * sizeof(Entry));
         Data * d2 = new (d) Data(capacity);
-        d2->push_back(Entry(0,  val));
+        return d2;
+    }
+
+    static Data * new_data(const T & val, size_t capacity)
+    {
+        // TODO: exception safety...
+        void * d = malloc(sizeof(Data) + capacity * sizeof(Entry));
+        Data * d2 = new (d) Data(capacity);
+        d2->push_back(Entry(1,  val));
         return d2;
     }
 
@@ -248,7 +256,7 @@ public:
         if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
-        Epoch valid_from = 0;
+        Epoch valid_from = 1;
         if (data->size() > 2)
             valid_from = data->element(data->size() - 2).valid_to;
 
@@ -257,7 +265,7 @@ public:
 
         Data * new_data = data->copy(data->size() + 1);
         new_data->back().valid_to = new_epoch;
-        new_data->push_back(Entry(0 /* valid_to */,
+        new_data->push_back(Entry(1 /* valid_to */,
                                   *reinterpret_cast<T *>(new_value)));
         
         set_data(new_data);
@@ -268,9 +276,9 @@ public:
     virtual void commit(Epoch new_epoch) throw ()
     {
         // Now that it's definitive, we have an older entry to clean up
-        Epoch valid_from = 0;
+        Epoch valid_from = 1;
         if (data->size() > 2)
-            valid_from = data->element(data->size() - 2).valid_to;
+            valid_from = data->element(data->size() - 3).valid_to;
         snapshot_info.register_cleanup(this, valid_from);
     }
 
@@ -284,11 +292,17 @@ public:
         if (data->size() < 2)
             throw Exception("cleaning up with no values to clean up");
 
+        using namespace std;
+        cerr << "cleaning up: unused_epoch = " << unused_epoch
+             << " trigger_epoch = " << trigger_epoch << endl;
+
         if (unused_epoch < data->front().valid_to) {
             // Can be done atomically
             data->pop_front();
             return;
         }
+
+        cerr << "not in first one" << endl;
 
         Data * data2 = new_data(data->size());
         
@@ -296,10 +310,17 @@ public:
         
 
         // TODO: optimize
-        Epoch valid_from = 0;
+        Epoch valid_from = 1;
         bool found = false;
         for (unsigned i = data->first, e = data->last, j = 0; i != e;  ++i) {
+            cerr << "i = " << i << " e = " << e << " j = " << j
+                 << " element = " << data->history[i].value << " valid to "
+                 << data->history[i].valid_to << " found = "
+                 << found << " valid_from = " << valid_from << endl;
+            cerr << "data2->size() = " << data2->size() << endl;
+
             if (valid_from == unused_epoch) {
+                cerr << "  removing" << endl;
                 if (found)
                     throw Exception("two with the same valid_from value");
                 found = true;
@@ -311,13 +332,21 @@ public:
                 new (&data2->history[j].value) T(data->history[i].value);
                 data2->history[j].valid_to = data->history[i].valid_to;
                 ++j;
+                ++data2->last;
             }
 
             valid_from = data->history[i].valid_to;
         }
 
         if (found) {
+            cerr << "data->size() = " << data->size() << endl;
+            cerr << "data2->size() = " << data2->size() << endl;
+            if (data->size() != data2->size() + 1)
+                throw Exception("sizes were wrong");
             set_data(data2);
+    
+            dump_unlocked();
+
             return;
         }
 

@@ -63,6 +63,8 @@ void do_versioned_test()
 
         BOOST_CHECK(t1->commit());
 
+        BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(600, &var), 1);
+
         BOOST_CHECK_EQUAL(var.read(), 1);
         BOOST_CHECK_EQUAL(var.history_size(), 1);
 
@@ -96,6 +98,8 @@ void do_versioned_test()
 
         BOOST_CHECK(t3->commit());
 
+        BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(601, &var), 601);
+
         BOOST_CHECK_EQUAL(var.read(), 2);
         BOOST_CHECK_EQUAL(var.history_size(), 2);
 
@@ -123,6 +127,9 @@ void do_versioned_test()
     // there is another (t2) with the same epoch
     delete t2a.release();
 
+    BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(600, &var), 1);
+    BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(601, &var), 601);
+        
     BOOST_CHECK_EQUAL(var.read(), 2);
     BOOST_CHECK_EQUAL(var.history_size(), 2);
 
@@ -154,6 +161,10 @@ void do_versioned_test()
 
     BOOST_CHECK_EQUAL(var.read(), 2);
     BOOST_CHECK_EQUAL(var.history_size(), 1);
+
+    BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(600, &var), 1);
+    BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(601, &var), 0);
+    BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(602, &var), 0);
 
     {
         cerr << "--------------------------------" << endl;
@@ -189,15 +200,18 @@ void do_versioned_test()
     BOOST_CHECK_EQUAL(var.history_size(), 0);
 }
 
-#if 0
+#if 1
 BOOST_AUTO_TEST_CASE( test0 )
 {
     do_versioned_test<Versioned<int> >();
 }
 #endif
 
+#if 1
 BOOST_AUTO_TEST_CASE( test1 )
 {
+    cerr << endl << "================ versioned2" << endl;
+
     do_versioned_test<Versioned2<int> >();
 }
-
+#endif

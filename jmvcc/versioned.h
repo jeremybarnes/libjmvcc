@@ -101,7 +101,7 @@ private:
     // latest epoch.
 
     struct Entry {
-        explicit Entry(Epoch valid_to = 0, T * value = 0)
+        explicit Entry(Epoch valid_to = 1, T * value = 0)
             : valid_to(valid_to), value(value)
         {
         }
@@ -117,7 +117,7 @@ private:
     History history;     ///< History of older values with epoch
     mutable Mutex lock;
 
-    Epoch valid_from() const { return (history.empty() ? 0 : history.back().valid_to); }
+    Epoch valid_from() const { return (history.empty() ? 1 : history.back().valid_to); }
 
     /// Return the value for the given epoch
     const T & value_at_epoch(Epoch epoch) const
@@ -213,7 +213,7 @@ public:
         ACE_Guard<Mutex> guard(lock);
 
         // Register the new history entry to be cleaned up
-        Epoch valid_from = (history.size() > 1 ? history[-2].valid_to : 0);
+        Epoch valid_from = (history.size() > 1 ? history[-2].valid_to : 1);
         snapshot_info.register_cleanup(this, valid_from);
     }
 
@@ -241,7 +241,7 @@ public:
         }
 
         // TODO: optimize
-        Epoch valid_from = 0;
+        Epoch valid_from = 1;
         for (typename History::iterator
                  it = history.begin(),
                  last,
@@ -249,7 +249,7 @@ public:
              it != end;  valid_from = it->valid_to, last = it, ++it) {
 
             if (valid_from == unused_epoch) {
-                if (valid_from != 0)
+                if (valid_from != 1)
                     last->valid_to = it->valid_to;
                 cleanup_entry(*it);
                 history.erase(it);
