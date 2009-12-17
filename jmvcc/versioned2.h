@@ -47,11 +47,7 @@ struct Versioned2 : public Versioned_Object {
         T * local = current_trans->local_value<T>(this);
 
         if (!local) {
-            T value;
-            {
-                ACE_Guard<ACE_Mutex> guard(wlock);
-                value = data->value_at_epoch(current_trans->epoch());
-            }
+            T value = data->value_at_epoch(current_trans->epoch());
             local = current_trans->local_value<T>(this, value);
             
             if (!local)
@@ -68,18 +64,14 @@ struct Versioned2 : public Versioned_Object {
     
     const T read() const
     {
-        if (!current_trans) {
-            ACE_Guard<ACE_Mutex> guard(wlock);
-            T result = data->value_at_epoch(get_current_epoch());
-            return result;
-        }
+        if (!current_trans)
+            return data->value_at_epoch(get_current_epoch());
+
         const T * val = current_trans->local_value<T>(this);
         
         if (val) return *val;
         
-        ACE_Guard<ACE_Mutex> guard(wlock);
-        T result = data->value_at_epoch(current_trans->epoch());
-        return result;
+        return data->value_at_epoch(current_trans->epoch());
     }
 
     size_t history_size() const
@@ -221,8 +213,6 @@ private:
     // The single internal data member.  Updated atomically.
     Data * data;
 
-    mutable ACE_Mutex wlock;
-
     static void delete_data(Data * data)
     {
         // For the moment, we leak, until we get GC working
@@ -272,8 +262,6 @@ public:
 
     virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * new_value)
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
-
         if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
@@ -296,8 +284,6 @@ public:
 
     virtual void commit(Epoch new_epoch) throw ()
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
-
         // Now that it's definitive, we have an older entry to clean up
         Epoch valid_from = 1;
         if (data->size() > 2)
@@ -308,16 +294,12 @@ public:
 
     virtual void rollback(Epoch new_epoch, void * local_data) throw ()
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
-
         data->pop_back();
         data->back().valid_to = 1;  // probably unnecessary...
     }
 
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
-        
         if (data->size() < 2)
             throw Exception("cleaning up with no values to clean up");
 
