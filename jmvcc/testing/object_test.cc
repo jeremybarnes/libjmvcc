@@ -34,6 +34,8 @@ using namespace std;
 
 using boost::unit_test::test_suite;
 
+#if 0
+
 BOOST_AUTO_TEST_CASE( test0 )
 {
     // Check basic invariants
@@ -115,6 +117,8 @@ BOOST_AUTO_TEST_CASE( test0 )
     current_epoch_ = 1;
     earliest_epoch_ = 1;
 }
+
+#endif
 
 void object_test_thread(Versioned<int> & var, int iter,
                         boost::barrier & barrier,
@@ -320,7 +324,7 @@ void run_object_test(int nthreads, int niter)
     BOOST_CHECK_EQUAL(val.read(), niter * nthreads * 2);
 }
 
-
+#if 0
 BOOST_AUTO_TEST_CASE( test1 )
 {
     //run_object_test(1, 10000);
@@ -330,6 +334,7 @@ BOOST_AUTO_TEST_CASE( test1 )
     run_object_test(100, 1000);
     run_object_test(1000, 100);
 }
+#endif
 
 template<class Var>
 struct Object_Test_Thread2 {
@@ -442,9 +447,11 @@ BOOST_AUTO_TEST_CASE( test2 )
 {
     cerr << endl << endl << "========= test 2: multiple variables" << endl;
     
-    run_object_test2<Versioned<int> >(1, 10, 1);
+    //run_object_test2<Versioned<int> >(1, 1000, 1);
+    //run_object_test2<Versioned2<int> >(1, 1000, 1);
     //run_object_test2(2, 20, 10);
-    run_object_test2<Versioned<int> >(2,  50000, 2);
+    //run_object_test2<Versioned<int> >(2,  5000, 2);
+    run_object_test2<Versioned2<int> >(2,  5000, 2);
     run_object_test2<Versioned<int> >(10, 10000, 100);
     run_object_test2<Versioned<int> >(100, 1000, 10);
     run_object_test2<Versioned<int> >(1000, 100, 100);

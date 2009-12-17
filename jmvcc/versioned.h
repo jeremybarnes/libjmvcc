@@ -192,6 +192,9 @@ public:
         if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
+        //using namespace std;
+        //cerr << "old: valid_from() = " << valid_from() << endl;
+
         if (valid_from() > old_epoch)
             return false;  // something updated before us
 
@@ -215,6 +218,17 @@ public:
         // Register the new history entry to be cleaned up
         Epoch valid_from = (history.size() > 1 ? history[-2].valid_to : 1);
         snapshot_info.register_cleanup(this, valid_from);
+    }
+
+    Epoch fake_commit(Epoch new_epoch) throw ()
+    {
+        // Now that it's definitive, we perform the following:
+        // 1.  We cleanup the first value on the history list
+        ACE_Guard<Mutex> guard(lock);
+
+        // Register the new history entry to be cleaned up
+        Epoch valid_from = (history.size() > 1 ? history[-2].valid_to : 1);
+        return valid_from;
     }
 
     virtual void rollback(Epoch new_epoch, void * data) throw ()
@@ -369,6 +383,8 @@ public:
             e = e2;
         }
     }
+
+    template<typename T2> friend class Versioned2;
 };
 
 template<typename T> std::allocator<T> Versioned<T>::allocator;
