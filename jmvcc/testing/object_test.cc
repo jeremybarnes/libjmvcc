@@ -26,6 +26,7 @@
 #include <sched.h>
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"
+#include "jmvcc/versioned2.h"
 
 using namespace ML;
 using namespace JMVCC;
@@ -330,14 +331,15 @@ BOOST_AUTO_TEST_CASE( test1 )
     run_object_test(1000, 100);
 }
 
+template<class Var>
 struct Object_Test_Thread2 {
-    Versioned<int> * vars;
+    Var * vars;
     int nvars;
     int iter;
     boost::barrier & barrier;
     size_t & failures;
 
-    Object_Test_Thread2(Versioned<int> * vars,
+    Object_Test_Thread2(Var * vars,
                         int nvars,
                         int iter, boost::barrier & barrier,
                         size_t & failures)
@@ -401,11 +403,12 @@ struct Object_Test_Thread2 {
     }
 };
 
+template<class Var>
 void run_object_test2(int nthreads, int niter, int nvals)
 {
     cerr << "testing with " << nthreads << " threads and " << niter << " iter"
          << endl;
-    Versioned<int> vals[nvals];
+    Var vals[nvals];
     boost::barrier barrier(nthreads);
     boost::thread_group tg;
 
@@ -413,8 +416,8 @@ void run_object_test2(int nthreads, int niter, int nvals)
 
     Timer timer;
     for (unsigned i = 0;  i < nthreads;  ++i)
-        tg.create_thread(Object_Test_Thread2(vals, nvals, niter,
-                                             barrier, failures));
+        tg.create_thread(Object_Test_Thread2<Var>(vals, nvals, niter,
+                                                  barrier, failures));
     
     tg.join_all();
 
@@ -439,15 +442,21 @@ BOOST_AUTO_TEST_CASE( test2 )
 {
     cerr << endl << endl << "========= test 2: multiple variables" << endl;
     
-    run_object_test2(1, 10, 1);
+    run_object_test2<Versioned<int> >(1, 10, 1);
     //run_object_test2(2, 20, 10);
-    run_object_test2(2,  50000, 2);
-    run_object_test2(10, 10000, 100);
-    run_object_test2(100, 1000, 10);
-    run_object_test2(1000, 100, 100);
+    run_object_test2<Versioned<int> >(2,  50000, 2);
+    run_object_test2<Versioned<int> >(10, 10000, 100);
+    run_object_test2<Versioned<int> >(100, 1000, 10);
+    run_object_test2<Versioned<int> >(1000, 100, 100);
+    run_object_test2<Versioned2<int> >(1000, 100, 100);
 
     boost::timer t;
-    run_object_test2(1, 1000000, 1);
+    run_object_test2<Versioned<int> >(1, 1000000, 1);
+    cerr << "elapsed for 1000000 iterations: " << t.elapsed() << endl;
+    cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()
+         << "s" << endl;
+
+    run_object_test2<Versioned2<int> >(1, 1000000, 1);
     cerr << "elapsed for 1000000 iterations: " << t.elapsed() << endl;
     cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()
          << "s" << endl;

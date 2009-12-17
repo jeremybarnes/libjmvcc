@@ -63,7 +63,7 @@ struct Versioned : public Versioned_Object {
                 //history.validate();
                 value = value_at_epoch(current_trans->epoch());
             }
-            local = current_trans->local_value<int>(this, value);
+            local = current_trans->local_value<T>(this, value);
 
             if (!local)
                 throw Exception("mutate(): no local was created");

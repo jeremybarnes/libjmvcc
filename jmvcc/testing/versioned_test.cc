@@ -27,6 +27,7 @@
 #include <sched.h>
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"
+#include "jmvcc/versioned2.h"
 
 using namespace ML;
 using namespace JMVCC;
@@ -34,11 +35,12 @@ using namespace std;
 
 using boost::unit_test::test_suite;
 
-BOOST_AUTO_TEST_CASE( test0 )
+template<class Var>
+void do_versioned_test()
 {
     current_epoch_ = 600;
 
-    Versioned<int> var(0);
+    Var var(0);
 
     BOOST_CHECK_EQUAL(var.history_size(), 0);
     BOOST_CHECK_EQUAL(var.read(), 0);
@@ -186,3 +188,16 @@ BOOST_AUTO_TEST_CASE( test0 )
     BOOST_CHECK_EQUAL(var.read(), 2);
     BOOST_CHECK_EQUAL(var.history_size(), 0);
 }
+
+#if 0
+BOOST_AUTO_TEST_CASE( test0 )
+{
+    do_versioned_test<Versioned<int> >();
+}
+#endif
+
+BOOST_AUTO_TEST_CASE( test1 )
+{
+    do_versioned_test<Versioned2<int> >();
+}
+
