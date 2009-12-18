@@ -122,7 +122,6 @@ private:
         T value;
     };
 
-#if 0
     // Internal data object allocated
     struct Data {
         Data(size_t capacity)
@@ -249,61 +248,6 @@ private:
             return total;
         }
     };
-#else
-    // Internal data object allocated
-    struct Data : public std::vector<Entry> {
-        Data(size_t capacity)
-        {
-            this->reserve(capacity);
-        }
-
-        Data(size_t capacity, const Data & old_data)
-        {
-            this->reserve(capacity);
-            this->insert(this->end(), old_data.begin(), old_data.end());
-        }
-
-        /// Return the value for the given epoch
-        const T & value_at_epoch(Epoch epoch) const
-        {
-            for (int i = this->size() - 1;  i > 0;  --i) {
-                Epoch valid_from = (*this)[i - 1].valid_to;
-                if (epoch >= valid_from)
-                    return (*this)[i].value;
-            }
-            
-            return this->front().value;
-        }
-        
-        Data * copy(size_t new_capacity) const
-        {
-            if (new_capacity < this->size())
-                throw Exception("new capacity is wrong");
-
-            return new_data(*this, new_capacity);
-        }
-
-        void pop_front()
-        {
-            this->erase(this->begin());
-        }
-        
-        Entry & element(int index)
-        {
-            return this->at(index);
-        }
-
-        const Entry & element(int index) const
-        {
-            return this->at(index);
-        }
-
-        size_t checksum() const
-        {
-            return 0;
-        }
-    };
-#endif
 
     mutable ACE_Mutex data_lock;
     
@@ -367,6 +311,8 @@ private:
         const Data * old_data2 = reinterpret_cast<const Data *>(data);
         if (old_data2 != old_data) {
             old_data = old_data2;
+
+            free(new_data);
 
             // TODO: delete new data
             return false;
@@ -468,7 +414,6 @@ public:
             
             //cerr << "not in first one" << endl;
             
-#if 0
             Data * data2 = new_data(d->size());
             
             // Copy them, skipping the one that matched
@@ -512,44 +457,9 @@ public:
                     throw Exception("sizes were wrong");
                 }
                 
-                set_data(data2);
-                
-                size_t cs3 = d->checksum();
-                if (cs1 != cs3)
-                    throw Exception("checksums not equal 2");
-                
-                return;
-            }
-#else
-            Data * data2 = new_data(*d, d->size());
-            
-            if (unused_epoch < data2->front().valid_to) {
-                // Can be done atomically
-                data2->pop_front();
                 if (set_data(d, data2)) return;
                 continue;
             }
-            
-            // TODO: optimize
-            Epoch valid_from = 1;
-            bool found = false;
-            for (typename
-                     Data::iterator it = data2->begin(),
-                     last,
-                 end = data2->end();
-                 it != end;  valid_from = it->valid_to, last = it, ++it) {
-                if (valid_from == unused_epoch) {
-                    if (it != data2->begin())
-                        last->valid_to = it->valid_to;
-                    data2->erase(it);
-                    if (set_data(d, data2)) return;
-                    found = true;
-                    break;
-                }
-            }
-            
-            if (found) continue;
-#endif
             
             static Lock lock;
             Guard guard2(lock);
