@@ -27,6 +27,7 @@
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"
 #include "jmvcc/versioned2.h"
+#include "arch/demangle.h"
 
 using namespace ML;
 using namespace JMVCC;
@@ -34,7 +35,7 @@ using namespace std;
 
 using boost::unit_test::test_suite;
 
-#if 0
+#if 1
 
 BOOST_AUTO_TEST_CASE( test0 )
 {
@@ -291,7 +292,7 @@ template<class Var>
 void run_object_test(int nthreads, int niter)
 {
     cerr << "testing with " << nthreads << " threads and " << niter << " iter"
-         << endl;
+         << " class " << demangle(typeid(Var).name()) << endl;
     Var val(0);
     boost::barrier barrier(nthreads);
     boost::thread_group tg;
@@ -331,10 +332,9 @@ BOOST_AUTO_TEST_CASE( test1 )
 {
     //run_object_test(1, 10000);
     //run_object_test(10, 1000);
-    run_object_test<Versioned2<int> >(1, 10000);
-    run_object_test<Versioned2<int> >(2, 5000);
+    run_object_test<Versioned2<int> >(1, 100000);
+    run_object_test<Versioned2<int> >(10, 10000);
 
-    return;
     run_object_test<Versioned<int> >(1, 100000);
     run_object_test<Versioned<int> >(10, 10000);
     run_object_test<Versioned<int> >(100, 1000);
@@ -418,7 +418,7 @@ template<class Var>
 void run_object_test2(int nthreads, int niter, int nvals)
 {
     cerr << "testing with " << nthreads << " threads and " << niter << " iter"
-         << endl;
+         << " class " << demangle(typeid(Var).name()) << endl;
     Var vals[nvals];
     boost::barrier barrier(nthreads);
     boost::thread_group tg;
@@ -469,6 +469,7 @@ BOOST_AUTO_TEST_CASE( test2 )
     cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()
          << "s" << endl;
 
+    t.restart();
     run_object_test2<Versioned2<int> >(1, 1000000, 1);
     cerr << "elapsed for 1000000 iterations: " << t.elapsed() << endl;
     cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()

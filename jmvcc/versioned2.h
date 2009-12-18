@@ -235,13 +235,7 @@ private:
     };
 
     // The single internal data member.  Updated atomically.
-    Data * data;
-
-    //Data * get_data()
-    //{
-    //    ACE_Guard<ACE_Mutex> guard(data_lock);
-    //    return reinterpret_cast<Data *>(data);
-    //}
+    mutable Data * data;
 
     const Data * get_data() const
     {
@@ -301,8 +295,6 @@ public:
 
     virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * new_value)
     {
-        //ACE_Guard<ACE_Mutex> guard(wlock);
-
         for (;;) {
             const Data * d = get_data();
 
@@ -340,7 +332,6 @@ public:
 
     virtual void rollback(Epoch new_epoch, void * local_data) throw ()
     {
-
 #if 1
         const Data * d = get_data();
 
@@ -350,10 +341,13 @@ public:
             if (set_data(d, d2)) return;
         }
 #else
-        //ACE_Guard<ACE_Mutex> guard(wlock);
-        
-        d->pop_back();
-        d->back().valid_to = 1;  // probably unnecessary...
+        Data * d;
+        do {
+            d = get_data();
+            d->pop_back();
+            d->back().valid_to = 1;  // probably unnecessary...
+            __sync_synchronize();
+        } while (d != data);
 #endif
     }
 
