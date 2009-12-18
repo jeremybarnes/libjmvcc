@@ -196,6 +196,13 @@ register_snapshot(Snapshot * snapshot)
     return snapshot->epoch_;
 }
 
+void Snapshot_Info::Entry::
+add_cleanup(const std::pair<Versioned_Object *, Epoch> & cleanup)
+{
+    ACE_Guard<Spinlock> guard(lock);
+    cleanups.push_back(cleanup);
+}
+
 void
 Snapshot_Info::
 remove_snapshot(Snapshot * snapshot)
@@ -315,7 +322,8 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
         
         if (prev_epoch >= valid_from && prev_snapshot) {
             // still needed by prev snapshot
-            prev_snapshot->cleanups.push_back(make_pair(obj, valid_from));
+            //prev_snapshot->cleanups.push_back(make_pair(obj, valid_from));
+            prev_snapshot->add_cleanup(make_pair(obj, valid_from));
         }
         else {
             // not needed anymore
@@ -358,14 +366,22 @@ void
 Snapshot_Info::
 register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup)
 {
+    // This is always called with the commit lock held, so:
+    // 1.  The cleanups cannot happen at the same time;
+    // 2.  There is only one thing here at a given time
+    
     // NOTE: this is called with the object's lock held
-    ACE_Guard<Mutex> guard(lock);
+    Entries::iterator it;
 
-    if (entries.empty())
-        throw Exception("register_cleanup with no snapshots");
+    {
+        ACE_Guard<Mutex> guard(lock);
 
-    Entries::iterator it = boost::prior(entries.end());
-    it->second.cleanups.push_back(make_pair(obj, epoch_to_cleanup));
+        if (entries.empty())
+            throw Exception("register_cleanup with no snapshots");
+
+        it = boost::prior(entries.end());
+        it->second.add_cleanup(make_pair(obj, epoch_to_cleanup));
+    }
 }
 
 void

@@ -417,7 +417,8 @@ struct Object_Test_Thread2 {
 template<class Var>
 void run_object_test2(int nthreads, int niter, int nvals)
 {
-    cerr << "testing with " << nthreads << " threads and " << niter << " iter"
+    cerr << endl << "testing with " << nthreads << " threads and "
+         << niter << " iter"
          << " class " << demangle(typeid(Var).name()) << endl;
     Var vals[nvals];
     boost::barrier barrier(nthreads);
@@ -459,7 +460,9 @@ BOOST_AUTO_TEST_CASE( test2 )
     //run_object_test2<Versioned<int> >(2,  5000, 2);
     run_object_test2<Versioned2<int> >(2,  5000, 2);
     run_object_test2<Versioned<int> >(10, 10000, 100);
+    run_object_test2<Versioned2<int> >(10, 10000, 100);
     run_object_test2<Versioned<int> >(100, 1000, 10);
+    run_object_test2<Versioned2<int> >(100, 1000, 10);
     run_object_test2<Versioned<int> >(1000, 100, 100);
     run_object_test2<Versioned2<int> >(1000, 100, 100);
 

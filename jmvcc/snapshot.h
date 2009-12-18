@@ -18,6 +18,7 @@
 #include "utils/string_functions.h"
 #include <boost/utility.hpp>
 #include "jmvcc_defs.h"
+#include "spinlock.h"
 
 class test0;   // for testing code
 
@@ -115,6 +116,9 @@ private:
     struct Entry {
         std::set<Snapshot *> snapshots;
         Cleanups cleanups;
+
+        void add_cleanup(const std::pair<Versioned_Object *, Epoch> & cleanup);
+        mutable Spinlock lock;
     };
 
     typedef std::map<Epoch, Entry> Entries;

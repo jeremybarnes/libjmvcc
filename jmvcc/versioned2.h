@@ -13,7 +13,9 @@
 #include "utils/circular_buffer.h"
 #include "arch/cmp_xchg.h"
 
+
 namespace JMVCC {
+
 
 /*****************************************************************************/
 /* VERSIONED                                                                 */

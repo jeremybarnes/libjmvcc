@@ -3,7 +3,8 @@ JMVCC_SOURCES := \
 	snapshot.cc \
 	sandbox.cc \
 	transaction.cc \
-	versioned_object.cc
+	versioned_object.cc \
+	garbage.cc
 
 JMVCC_LINK :=  boost_date_time-mt
 
