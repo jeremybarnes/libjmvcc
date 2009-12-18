@@ -29,15 +29,28 @@ namespace JMVCC {
 template<typename T>
 struct Versioned2 : public Versioned_Object {
     typedef ACE_Mutex Mutex;
+
+    struct Info {
+        Info()
+        {
+            using namespace std;
+            cerr << "sizeof(Data) = " << sizeof(Data) << endl;
+            cerr << "sizeof(Entry) = " << sizeof(Entry) << endl;
+            Data * d = 0;
+            cerr << "&d.history[0] = " << &d->history[0] << endl;
+            cerr << "&d.history[0] = " << &d->history[1] << endl;
+        }
+    };
     
     explicit Versioned2(const T & val = T())
     {
+        static Info info;
         data = new_data(val, 1);
     }
 
     ~Versioned2()
     {
-        delete_data(const_cast<Data *>(data));
+        delete_data(const_cast<Data *>(get_data()));
     }
 
     // Client interface.  Just two methods to get at the current value.
@@ -49,8 +62,7 @@ struct Versioned2 : public Versioned_Object {
         if (!local) {
             T value;
             {
-                ACE_Guard<ACE_Mutex> guard(wlock);
-                value = data->value_at_epoch(current_trans->epoch());
+                value = get_data()->value_at_epoch(current_trans->epoch());
             }
             local = current_trans->local_value<T>(this, value);
             
@@ -68,23 +80,23 @@ struct Versioned2 : public Versioned_Object {
     
     const T read() const
     {
+        const Data * d = get_data();
+
         if (!current_trans) {
-            ACE_Guard<ACE_Mutex> guard(wlock);
-            T result = data->value_at_epoch(get_current_epoch());
+            T result = d->value_at_epoch(get_current_epoch());
             return result;
         }
         const T * val = current_trans->local_value<T>(this);
         
         if (val) return *val;
         
-        ACE_Guard<ACE_Mutex> guard(wlock);
-        T result = data->value_at_epoch(current_trans->epoch());
+        T result = d->value_at_epoch(current_trans->epoch());
         return result;
     }
 
     size_t history_size() const
     {
-        size_t result = data->size() - 1;
+        size_t result = get_data()->size() - 1;
         return result;
     }
 
@@ -121,7 +133,7 @@ private:
         uint32_t capacity;   // Number allocated
         uint32_t first;      // Index of first valid entry
         uint32_t last;       // Index of last valid entry
-        Entry history[0];  // real ones are allocated after
+        Entry history[1];  // real ones are allocated after
 
         uint32_t size() const { return last - first; }
 
@@ -216,12 +228,37 @@ private:
                 throw Exception("invalid element");
             return history[first + index];
         }
+
+        size_t checksum() const
+        {
+            const unsigned * vals = reinterpret_cast<const unsigned *>(this);
+            const unsigned * vals2 
+                = reinterpret_cast<const unsigned *>(&history[capacity]);
+
+            size_t total = 0;
+            for (; vals != vals2;  ++vals)
+                total = total * 5 + (*vals);
+
+            return total;
+        }
     };
+
+    mutable ACE_Mutex data_lock;
     
     // The single internal data member.  Updated atomically.
-    Data * data;
+    void * data;
 
-    mutable ACE_Mutex wlock;
+    //Data * get_data()
+    //{
+    //    ACE_Guard<ACE_Mutex> guard(data_lock);
+    //    return reinterpret_cast<Data *>(data);
+    //}
+
+    const Data * get_data() const
+    {
+        ACE_Guard<ACE_Mutex> guard(data_lock);
+        return reinterpret_cast<const Data *>(data);
+    }
 
     static void delete_data(Data * data)
     {
@@ -261,9 +298,11 @@ private:
         // to do it atomically.
         __sync_synchronize();
 
-        Data * old_data = data;
+        ACE_Guard<ACE_Mutex> guard(data_lock);
+
+        const Data * old_data = reinterpret_cast<const Data *>(data);
         data = new_data;
-        delete_data(old_data);
+        delete_data(const_cast<Data *>(old_data));
         return true;
     }
         
@@ -272,19 +311,21 @@ public:
 
     virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * new_value)
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
+        //ACE_Guard<ACE_Mutex> guard(wlock);
+
+        const Data * d = get_data();
 
         if (new_epoch != get_current_epoch() + 1)
             throw Exception("epochs out of order");
 
         Epoch valid_from = 1;
-        if (data->size() > 1)
-            valid_from = data->element(data->size() - 2).valid_to;
+        if (d->size() > 1)
+            valid_from = d->element(d->size() - 2).valid_to;
 
         if (valid_from > old_epoch)
             return false;  // something updated before us
 
-        Data * new_data = data->copy(data->size() + 1);
+        Data * new_data = d->copy(d->size() + 1);
         new_data->back().valid_to = new_epoch;
         new_data->push_back(Entry(1 /* valid_to */,
                                   *reinterpret_cast<T *>(new_value)));
@@ -296,29 +337,46 @@ public:
 
     virtual void commit(Epoch new_epoch) throw ()
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
+        const Data * d = get_data();
+
+        //ACE_Guard<ACE_Mutex> guard(wlock);
 
         // Now that it's definitive, we have an older entry to clean up
         Epoch valid_from = 1;
-        if (data->size() > 2)
-            valid_from = data->element(data->size() - 3).valid_to;
+        if (d->size() > 2)
+            valid_from = d->element(d->size() - 3).valid_to;
 
         snapshot_info.register_cleanup(this, valid_from);
     }
 
     virtual void rollback(Epoch new_epoch, void * local_data) throw ()
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
+#if 1
+        const Data * d = get_data();
+        Data * d2 = d->copy(d->size());
+        d2->pop_back();
+        set_data(d2);
+#else
+        //ACE_Guard<ACE_Mutex> guard(wlock);
 
-        data->pop_back();
-        data->back().valid_to = 1;  // probably unnecessary...
+        d->pop_back();
+        d->back().valid_to = 1;  // probably unnecessary...
+#endif
     }
 
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
     {
-        ACE_Guard<ACE_Mutex> guard(wlock);
+        const Data * d = get_data();
+
+        size_t cs1 = d->checksum();
+        size_t cs2 = d->checksum();
+
+        if (cs1 != cs2)
+            throw Exception("checksums not equal");
+
+        //ACE_Guard<ACE_Mutex> guard(wlock);
         
-        if (data->size() < 2)
+        if (d->size() < 2)
             throw Exception("cleaning up with no values to clean up");
 
         using namespace std;
@@ -327,15 +385,17 @@ public:
 
         //dump_unlocked();
 
-        if (unused_epoch < data->front().valid_to) {
+#if 0
+        if (unused_epoch < d->front().valid_to) {
             // Can be done atomically
-            data->pop_front();
+            d->pop_front();
             return;
         }
+#endif
 
         //cerr << "not in first one" << endl;
 
-        Data * data2 = new_data(data->size());
+        Data * data2 = new_data(d->size());
         
         // Copy them, skipping the one that matched
         
@@ -343,43 +403,47 @@ public:
         // TODO: optimize
         Epoch valid_from = 1;
         bool found = false;
-        for (unsigned i = data->first, e = data->last, j = 0; i != e;  ++i) {
+        for (unsigned i = d->first, e = d->last, j = 0; i != e;  ++i) {
             //cerr << "i = " << i << " e = " << e << " j = " << j
-            //     << " element = " << data->history[i].value << " valid to "
-            //     << data->history[i].valid_to << " found = "
+            //     << " element = " << d->history[i].value << " valid to "
+            //     << d->history[i].valid_to << " found = "
             //     << found << " valid_from = " << valid_from << endl;
             //cerr << "data2->size() = " << data2->size() << endl;
 
             if (valid_from == unused_epoch
-                || (i == data->first
-                    && unused_epoch < data->front().valid_to)) {
+                || (i == d->first
+                    && unused_epoch < d->front().valid_to)) {
                 //cerr << "  removing" << endl;
                 if (found)
                     throw Exception("two with the same valid_from value");
                 found = true;
                 if (j != 0)
-                    data2->history[j - 1].valid_to = data->history[i].valid_to;
+                    data2->history[j - 1].valid_to = d->history[i].valid_to;
             }
             else {
                 // Copy element i to element j
-                new (&data2->history[j].value) T(data->history[i].value);
-                data2->history[j].valid_to = data->history[i].valid_to;
+                new (&data2->history[j].value) T(d->history[i].value);
+                data2->history[j].valid_to = d->history[i].valid_to;
                 ++j;
                 ++data2->last;
             }
 
-            valid_from = data->history[i].valid_to;
+            valid_from = d->history[i].valid_to;
         }
 
         if (found) {
-            if (data->size() != data2->size() + 1) {
-                cerr << "data->size() = " << data->size() << endl;
+            if (d->size() != data2->size() + 1) {
+                cerr << "d->size() = " << d->size() << endl;
                 cerr << "data2->size() = " << data2->size() << endl;
                 dump_unlocked();
                 throw Exception("sizes were wrong");
             }
-            set_data(data2);
+            //set_data(data2);
 
+            size_t cs3 = d->checksum();
+            if (cs1 != cs3)
+                throw Exception("checksums not equal 2");
+            
             return;
         }
 
@@ -451,13 +515,15 @@ public:
 
     void dump_itl(std::ostream & stream, int indent = 0) const
     {
+        const Data * d = get_data();
+
         using namespace std;
         std::string s(indent, ' ');
         stream << s << "object at " << this << std::endl;
-        stream << s << "history with " << data->size()
+        stream << s << "history with " << d->size()
                << " values" << endl;
-        for (unsigned i = 0;  i < data->size();  ++i) {
-            const Entry & entry = data->element(i);
+        for (unsigned i = 0;  i < d->size();  ++i) {
+            const Entry & entry = d->element(i);
             stream << s << "  " << i << ": valid to "
                    << entry.valid_to;
             stream << " addr " << &entry.value;
