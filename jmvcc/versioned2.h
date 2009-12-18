@@ -11,6 +11,7 @@
 #include <iostream> // debug
 #include "versioned.h"
 #include "utils/circular_buffer.h"
+#include "arch/cmp_xchg.h"
 
 namespace JMVCC {
 
@@ -110,11 +111,13 @@ private:
     // latest epoch.
 
     struct Entry {
-        explicit Entry(Epoch valid_to = 1, const T & value = T())
-            : valid_to(valid_to), value(value)
+        explicit Entry(Epoch valid_to = 1, const T & value = T(),
+                       Epoch valid_from = 1)
+            : valid_from(valid_from), valid_to(valid_to), value(value)
         {
         }
 
+        Epoch valid_from;
         Epoch valid_to;
         T value;
     };
@@ -218,7 +221,7 @@ private:
         {
             return history[last - 1];
         }
-        
+
         Entry & element(int index)
         {
             if (index < 0 || index >= size())
@@ -280,6 +283,11 @@ private:
             return new_data(*this, new_capacity);
         }
 
+        void pop_front()
+        {
+            this->erase(this->begin());
+        }
+        
         Entry & element(int index)
         {
             return this->at(index);
@@ -332,7 +340,7 @@ private:
         // TODO: exception safety...
         void * d = malloc(sizeof(Data) + capacity * sizeof(Entry));
         Data * d2 = new (d) Data(capacity);
-        d2->push_back(Entry(1,  val));
+        d2->push_back(Entry(1,  val, get_current_epoch()));
         return d2;
     }
 
@@ -344,7 +352,7 @@ private:
         return d2;
     }
 
-    bool set_data(Data * new_data)
+    bool set_data(const Data * & old_data, Data * new_data)
     {
         // For the moment, the commit lock is held when we update this, so
         // there is no possibility of conflict.  But if ever we decide to
@@ -354,7 +362,16 @@ private:
 
         ACE_Guard<ACE_Mutex> guard(data_lock);
 
-        const Data * old_data = reinterpret_cast<const Data *>(data);
+        // Simulate compare and exchange
+
+        const Data * old_data2 = reinterpret_cast<const Data *>(data);
+        if (old_data2 != old_data) {
+            old_data = old_data2;
+
+            // TODO: delete new data
+            return false;
+        }
+
         data = new_data;
         delete_data(const_cast<Data *>(old_data));
         return true;
@@ -367,33 +384,32 @@ public:
     {
         //ACE_Guard<ACE_Mutex> guard(wlock);
 
-        const Data * d = get_data();
+        for (;;) {
+            const Data * d = get_data();
 
-        if (new_epoch != get_current_epoch() + 1)
-            throw Exception("epochs out of order");
-
-        Epoch valid_from = 1;
-        if (d->size() > 1)
-            valid_from = d->element(d->size() - 2).valid_to;
-
-        if (valid_from > old_epoch)
-            return false;  // something updated before us
-
-        Data * new_data = d->copy(d->size() + 1);
-        new_data->back().valid_to = new_epoch;
-        new_data->push_back(Entry(1 /* valid_to */,
-                                  *reinterpret_cast<T *>(new_value)));
-        
-        set_data(new_data);
-
-        return true;
+            if (new_epoch != get_current_epoch() + 1)
+                throw Exception("epochs out of order");
+            
+            Epoch valid_from = 1;
+            if (d->size() > 1)
+                valid_from = d->element(d->size() - 2).valid_to;
+            
+            if (valid_from > old_epoch)
+                return false;  // something updated before us
+            
+            Data * new_data = d->copy(d->size() + 1);
+            new_data->back().valid_to = new_epoch;
+            new_data->push_back(Entry(1 /* valid_to */,
+                                      *reinterpret_cast<T *>(new_value),
+                                      new_epoch));
+            
+            if (set_data(d, new_data)) return true;
+        }
     }
 
     virtual void commit(Epoch new_epoch) throw ()
     {
         const Data * d = get_data();
-
-        //ACE_Guard<ACE_Mutex> guard(wlock);
 
         // Now that it's definitive, we have an older entry to clean up
         Epoch valid_from = 1;
@@ -405,14 +421,18 @@ public:
 
     virtual void rollback(Epoch new_epoch, void * local_data) throw ()
     {
+
 #if 1
         const Data * d = get_data();
-        Data * d2 = d->copy(d->size());
-        d2->pop_back();
-        set_data(d2);
+
+        for (;;) {
+            Data * d2 = d->copy(d->size());
+            d2->pop_back();
+            if (set_data(d, d2)) return;
+        }
 #else
         //ACE_Guard<ACE_Mutex> guard(wlock);
-
+        
         d->pop_back();
         d->back().valid_to = 1;  // probably unnecessary...
 #endif
@@ -422,122 +442,126 @@ public:
     {
         const Data * d = get_data();
 
-        size_t cs1 = d->checksum();
-        size_t cs2 = d->checksum();
+        for (;;) {
 
-        if (cs1 != cs2)
-            throw Exception("checksums not equal");
-
-        //ACE_Guard<ACE_Mutex> guard(wlock);
-        
-        if (d->size() < 2) {
-            using namespace std;
-            cerr << "cleaning up: unused_epoch = " << unused_epoch
-                 << " trigger_epoch = " << trigger_epoch << endl;
-            cerr << "current_epoch = " << get_current_epoch() << endl;
-            throw Exception("cleaning up with no values to clean up");
-        }
-
-        using namespace std;
-        //cerr << "cleaning up: unused_epoch = " << unused_epoch
-        //     << " trigger_epoch = " << trigger_epoch << endl;
-
-        //dump_unlocked();
-
-#if 0
-        if (unused_epoch < d->front().valid_to) {
-            // Can be done atomically
-            d->pop_front();
-            return;
-        }
-#endif
-
-        //cerr << "not in first one" << endl;
-
-#if 0
-        Data * data2 = new_data(d->size());
-        
-        // Copy them, skipping the one that matched
-        
-        // TODO: optimize
-        Epoch valid_from = 1;
-        bool found = false;
-        for (unsigned i = d->first, e = d->last, j = 0; i != e;  ++i) {
-            //cerr << "i = " << i << " e = " << e << " j = " << j
-            //     << " element = " << d->history[i].value << " valid to "
-            //     << d->history[i].valid_to << " found = "
-            //     << found << " valid_from = " << valid_from << endl;
-            //cerr << "data2->size() = " << data2->size() << endl;
-
-            if (valid_from == unused_epoch
-                || (i == d->first
-                    && unused_epoch < d->front().valid_to)) {
-                //cerr << "  removing" << endl;
-                if (found)
-                    throw Exception("two with the same valid_from value");
-                found = true;
-                if (j != 0)
-                    data2->history[j - 1].valid_to = d->history[i].valid_to;
+            if (d->size() < 2) {
+                using namespace std;
+                cerr << "cleaning up: unused_epoch = " << unused_epoch
+                     << " trigger_epoch = " << trigger_epoch << endl;
+                cerr << "current_epoch = " << get_current_epoch() << endl;
+                throw Exception("cleaning up with no values to clean up");
             }
-            else {
-                // Copy element i to element j
-                new (&data2->history[j].value) T(d->history[i].value);
-                data2->history[j].valid_to = d->history[i].valid_to;
-                ++j;
-                ++data2->last;
-            }
-
-            valid_from = d->history[i].valid_to;
-        }
-
-        if (found) {
-            if (d->size() != data2->size() + 1) {
-                cerr << "d->size() = " << d->size() << endl;
-                cerr << "data2->size() = " << data2->size() << endl;
-                dump_unlocked();
-                throw Exception("sizes were wrong");
-            }
-
-            set_data(data2);
-
-            size_t cs3 = d->checksum();
-            if (cs1 != cs3)
-                throw Exception("checksums not equal 2");
             
-            return;
-        }
-#else
-        Data * data2 = new_data(*d, d->size());
-
-        // TODO: optimize
-        Epoch valid_from = 1;
-        for (typename
-                 Data::iterator it = data2->begin(),
-                 last,
-                 end = data2->end();
-             it != end;  valid_from = it->valid_to, last = it, ++it) {
-            if (valid_from == unused_epoch
-                || (it == data2->begin()
-                    && unused_epoch < data2->front().valid_to)) {
-                if (it != data2->begin())
-                    last->valid_to = it->valid_to;
-                data2->erase(it);
-                set_data(data2);
+            using namespace std;
+            //cerr << "cleaning up: unused_epoch = " << unused_epoch
+            //     << " trigger_epoch = " << trigger_epoch << endl;
+            
+            //dump_unlocked();
+            
+#if 0
+            if (unused_epoch < d->front().valid_to) {
+                // Can be done atomically
+                d->pop_front();
                 return;
             }
-        }
 #endif
-
-        static Lock lock;
-        Guard guard2(lock);
-        cerr << "----------- cleaning up didn't exist ---------" << endl;
-        dump_unlocked();
-        cerr << "unused_epoch = " << unused_epoch << endl;
-        cerr << "trigger_epoch = " << trigger_epoch << endl;
-        snapshot_info.dump();
-        cerr << "----------- end cleaning up didn't exist ---------" << endl;
-        
-        throw Exception("attempt to clean up something that didn't exist");
+            
+            //cerr << "not in first one" << endl;
+            
+#if 0
+            Data * data2 = new_data(d->size());
+            
+            // Copy them, skipping the one that matched
+            
+            // TODO: optimize
+            Epoch valid_from = 1;
+            bool found = false;
+            for (unsigned i = d->first, e = d->last, j = 0; i != e;  ++i) {
+                //cerr << "i = " << i << " e = " << e << " j = " << j
+                //     << " element = " << d->history[i].value << " valid to "
+                //     << d->history[i].valid_to << " found = "
+                //     << found << " valid_from = " << valid_from << endl;
+                //cerr << "data2->size() = " << data2->size() << endl;
+                
+                if (valid_from == unused_epoch
+                    || (i == d->first
+                        && unused_epoch < d->front().valid_to)) {
+                    //cerr << "  removing" << endl;
+                    if (found)
+                        throw Exception("two with the same valid_from value");
+                    found = true;
+                    if (j != 0)
+                        data2->history[j - 1].valid_to = d->history[i].valid_to;
+                }
+                else {
+                    // Copy element i to element j
+                    new (&data2->history[j].value) T(d->history[i].value);
+                    data2->history[j].valid_to = d->history[i].valid_to;
+                    ++j;
+                    ++data2->last;
+                }
+                
+                valid_from = d->history[i].valid_to;
+            }
+            
+            if (found) {
+                if (d->size() != data2->size() + 1) {
+                    cerr << "d->size() = " << d->size() << endl;
+                    cerr << "data2->size() = " << data2->size() << endl;
+                    dump_unlocked();
+                    throw Exception("sizes were wrong");
+                }
+                
+                set_data(data2);
+                
+                size_t cs3 = d->checksum();
+                if (cs1 != cs3)
+                    throw Exception("checksums not equal 2");
+                
+                return;
+            }
+#else
+            Data * data2 = new_data(*d, d->size());
+            
+            if (unused_epoch < data2->front().valid_to) {
+                // Can be done atomically
+                data2->pop_front();
+                if (set_data(d, data2)) return;
+                continue;
+            }
+            
+            // TODO: optimize
+            Epoch valid_from = 1;
+            bool found = false;
+            for (typename
+                     Data::iterator it = data2->begin(),
+                     last,
+                 end = data2->end();
+                 it != end;  valid_from = it->valid_to, last = it, ++it) {
+                if (valid_from == unused_epoch) {
+                    if (it != data2->begin())
+                        last->valid_to = it->valid_to;
+                    data2->erase(it);
+                    if (set_data(d, data2)) return;
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (found) continue;
+#endif
+            
+            static Lock lock;
+            Guard guard2(lock);
+            cerr << "----------- cleaning up didn't exist ---------" << endl;
+            dump_unlocked();
+            cerr << "unused_epoch = " << unused_epoch << endl;
+            cerr << "trigger_epoch = " << trigger_epoch << endl;
+            snapshot_info.dump();
+            cerr << "----------- end cleaning up didn't exist ---------" << endl;
+            
+            throw Exception("attempt to clean up something that didn't exist");
+        }
     }
     
     virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) throw ()
@@ -605,8 +629,8 @@ public:
                << " values" << endl;
         for (unsigned i = 0;  i < d->size();  ++i) {
             const Entry & entry = d->element(i);
-            stream << s << "  " << i << ": valid to "
-                   << entry.valid_to;
+            stream << s << "  " << i << ": valid from "
+                   << entry.valid_from << " valid_to " << entry.valid_to;
             stream << " addr " << &entry.value;
             stream << " value " << entry.value;
             stream << endl;
