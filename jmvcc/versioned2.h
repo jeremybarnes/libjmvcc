@@ -30,21 +30,6 @@ namespace JMVCC {
 
 template<typename T>
 struct Versioned2 : public Versioned_Object {
-    typedef ACE_Mutex Mutex;
-
-#if 0
-    struct Info {
-        Info()
-        {
-            using namespace std;
-            cerr << "sizeof(Data) = " << sizeof(Data) << endl;
-            cerr << "sizeof(Entry) = " << sizeof(Entry) << endl;
-            Data * d = 0;
-            cerr << "&d.history[0] = " << &d->history[0] << endl;
-            cerr << "&d.history[0] = " << &d->history[1] << endl;
-        }
-    };
-#endif    
 
     explicit Versioned2(const T & val = T())
     {
@@ -249,10 +234,8 @@ private:
         }
     };
 
-    mutable ACE_Mutex data_lock;
-    
     // The single internal data member.  Updated atomically.
-    void * data;
+    Data * data;
 
     //Data * get_data()
     //{
@@ -262,7 +245,6 @@ private:
 
     const Data * get_data() const
     {
-        ACE_Guard<ACE_Mutex> guard(data_lock);
         return reinterpret_cast<const Data *>(data);
     }
 
@@ -304,23 +286,14 @@ private:
         // to do it atomically.
         __sync_synchronize();
 
-        ACE_Guard<ACE_Mutex> guard(data_lock);
+        bool result = cmp_xchg(reinterpret_cast<Data * &>(data),
+                               const_cast<Data * &>(old_data),
+                               new_data);
 
-        // Simulate compare and exchange
+        if (!result) free(new_data);
+        else delete_data(const_cast<Data *>(old_data));
 
-        const Data * old_data2 = reinterpret_cast<const Data *>(data);
-        if (old_data2 != old_data) {
-            old_data = old_data2;
-
-            free(new_data);
-
-            // TODO: delete new data
-            return false;
-        }
-
-        data = new_data;
-        delete_data(const_cast<Data *>(old_data));
-        return true;
+        return result;
     }
         
 public:
