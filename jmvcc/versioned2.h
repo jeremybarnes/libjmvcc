@@ -10,6 +10,7 @@
 
 #include <iostream> // debug
 #include "versioned.h"
+#include "utils/circular_buffer.h"
 
 namespace JMVCC {
 
@@ -30,6 +31,7 @@ template<typename T>
 struct Versioned2 : public Versioned_Object {
     typedef ACE_Mutex Mutex;
 
+#if 0
     struct Info {
         Info()
         {
@@ -41,10 +43,11 @@ struct Versioned2 : public Versioned_Object {
             cerr << "&d.history[0] = " << &d->history[1] << endl;
         }
     };
-    
+#endif    
+
     explicit Versioned2(const T & val = T())
     {
-        static Info info;
+        //static Info info;
         data = new_data(val, 1);
     }
 
@@ -116,6 +119,7 @@ private:
         T value;
     };
 
+#if 0
     // Internal data object allocated
     struct Data {
         Data(size_t capacity)
@@ -242,6 +246,56 @@ private:
             return total;
         }
     };
+#else
+    // Internal data object allocated
+    struct Data : public std::vector<Entry> {
+        Data(size_t capacity)
+        {
+            this->reserve(capacity);
+        }
+
+        Data(size_t capacity, const Data & old_data)
+        {
+            this->reserve(capacity);
+            this->insert(this->end(), old_data.begin(), old_data.end());
+        }
+
+        /// Return the value for the given epoch
+        const T & value_at_epoch(Epoch epoch) const
+        {
+            for (int i = this->size() - 1;  i > 0;  --i) {
+                Epoch valid_from = (*this)[i - 1].valid_to;
+                if (epoch >= valid_from)
+                    return (*this)[i].value;
+            }
+            
+            return this->front().value;
+        }
+        
+        Data * copy(size_t new_capacity) const
+        {
+            if (new_capacity < this->size())
+                throw Exception("new capacity is wrong");
+
+            return new_data(*this, new_capacity);
+        }
+
+        Entry & element(int index)
+        {
+            return this->at(index);
+        }
+
+        const Entry & element(int index) const
+        {
+            return this->at(index);
+        }
+
+        size_t checksum() const
+        {
+            return 0;
+        }
+    };
+#endif
 
     mutable ACE_Mutex data_lock;
     
@@ -376,8 +430,13 @@ public:
 
         //ACE_Guard<ACE_Mutex> guard(wlock);
         
-        if (d->size() < 2)
+        if (d->size() < 2) {
+            using namespace std;
+            cerr << "cleaning up: unused_epoch = " << unused_epoch
+                 << " trigger_epoch = " << trigger_epoch << endl;
+            cerr << "current_epoch = " << get_current_epoch() << endl;
             throw Exception("cleaning up with no values to clean up");
+        }
 
         using namespace std;
         //cerr << "cleaning up: unused_epoch = " << unused_epoch
@@ -395,11 +454,11 @@ public:
 
         //cerr << "not in first one" << endl;
 
+#if 0
         Data * data2 = new_data(d->size());
         
         // Copy them, skipping the one that matched
         
-
         // TODO: optimize
         Epoch valid_from = 1;
         bool found = false;
@@ -438,7 +497,8 @@ public:
                 dump_unlocked();
                 throw Exception("sizes were wrong");
             }
-            //set_data(data2);
+
+            set_data(data2);
 
             size_t cs3 = d->checksum();
             if (cs1 != cs3)
@@ -446,6 +506,27 @@ public:
             
             return;
         }
+#else
+        Data * data2 = new_data(*d, d->size());
+
+        // TODO: optimize
+        Epoch valid_from = 1;
+        for (typename
+                 Data::iterator it = data2->begin(),
+                 last,
+                 end = data2->end();
+             it != end;  valid_from = it->valid_to, last = it, ++it) {
+            if (valid_from == unused_epoch
+                || (it == data2->begin()
+                    && unused_epoch < data2->front().valid_to)) {
+                if (it != data2->begin())
+                    last->valid_to = it->valid_to;
+                data2->erase(it);
+                set_data(data2);
+                return;
+            }
+        }
+#endif
 
         static Lock lock;
         Guard guard2(lock);

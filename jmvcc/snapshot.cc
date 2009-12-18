@@ -215,7 +215,7 @@ remove_snapshot(Snapshot * snapshot)
         cerr << "snapshot = " << snapshot << endl;
         cerr << "current_trans = " << current_trans << endl;
         cerr << "snapshot->epoch() = " << snapshot->epoch() << endl;
-        snapshot_info.dump();
+        snapshot_info.dump_unlocked();
         //snapshot->dump();
         if (current_trans)
             current_trans->dump();

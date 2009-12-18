@@ -120,7 +120,8 @@ BOOST_AUTO_TEST_CASE( test0 )
 
 #endif
 
-void object_test_thread(Versioned<int> & var, int iter,
+template<class Var>
+void object_test_thread(Var & var, int iter,
                         boost::barrier & barrier,
                         size_t & failures)
 {
@@ -286,11 +287,12 @@ void object_test_thread(Versioned<int> & var, int iter,
     failures += local_failures;
 }
 
+template<class Var>
 void run_object_test(int nthreads, int niter)
 {
     cerr << "testing with " << nthreads << " threads and " << niter << " iter"
          << endl;
-    Versioned<int> val(0);
+    Var val(0);
     boost::barrier barrier(nthreads);
     boost::thread_group tg;
 
@@ -298,7 +300,7 @@ void run_object_test(int nthreads, int niter)
 
     Timer timer;
     for (unsigned i = 0;  i < nthreads;  ++i)
-        tg.create_thread(boost::bind(&object_test_thread, boost::ref(val),
+        tg.create_thread(boost::bind(&object_test_thread<Var>, boost::ref(val),
                                      niter,
                                      boost::ref(barrier),
                                      boost::ref(failures)));
@@ -324,15 +326,19 @@ void run_object_test(int nthreads, int niter)
     BOOST_CHECK_EQUAL(val.read(), niter * nthreads * 2);
 }
 
-#if 0
+#if 1
 BOOST_AUTO_TEST_CASE( test1 )
 {
     //run_object_test(1, 10000);
     //run_object_test(10, 1000);
-    run_object_test(1, 100000);
-    run_object_test(10, 10000);
-    run_object_test(100, 1000);
-    run_object_test(1000, 100);
+    run_object_test<Versioned2<int> >(1, 10000);
+    run_object_test<Versioned2<int> >(2, 5000);
+
+    return;
+    run_object_test<Versioned<int> >(1, 100000);
+    run_object_test<Versioned<int> >(10, 10000);
+    run_object_test<Versioned<int> >(100, 1000);
+    run_object_test<Versioned<int> >(1000, 100);
 }
 #endif
 
