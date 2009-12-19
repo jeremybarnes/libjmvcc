@@ -18,6 +18,10 @@ void enter_critical();
 
 void leave_critical();
 
+
+// Same as enter_critical() then leave_critical()
+void new_critical();
+
 void schedule_cleanup(const boost::function<void ()> & cleanup);
 
 } // namespace JMVCC
