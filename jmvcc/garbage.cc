@@ -6,8 +6,14 @@
 */
 
 #include "garbage.h"
+#include "arch/exception.h"
+#include "spinlock.h"
+#include <ace/Synch.h>
+#include <vector>
+
 
 using namespace std;
+using namespace ML;
 
 namespace JMVCC {
 
@@ -20,6 +26,7 @@ __thread size_t current_nesting = 0;
 void enter_critical()
 {
     if (current_critical != 0) {
+        current_critical = critical_counter;
         ++current_nesting;
         return;
     }
@@ -31,15 +38,19 @@ void leave_critical()
         throw Exception("badly nested critical sections");
     --current_nesting;
     if (current_nesting == 0) {
+        current_critical = 0;
         // We just left the critical section
         // do processing...
     }
 }
 
-
+Spinlock cleanups_lock;
+vector<boost::function<void ()> > cleanups;
 
 void schedule_cleanup(const boost::function<void ()> & cleanup)
 {
+    ACE_Guard<Spinlock> guard(cleanups_lock);
+    cleanups.push_back(cleanup);
 }
 
 

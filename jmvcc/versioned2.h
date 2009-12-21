@@ -12,7 +12,7 @@
 #include "versioned.h"
 #include "utils/circular_buffer.h"
 #include "arch/cmp_xchg.h"
-
+#include "arch/atomic_ops.h"
 
 namespace JMVCC {
 
@@ -193,7 +193,7 @@ private:
             new (&history[last].value) T(entry.value);
             history[last].valid_to = entry.valid_to;
             
-            __sync_synchronize();
+            memory_barrier();
 
             ++last;
         }
@@ -280,7 +280,7 @@ private:
         // there is no possibility of conflict.  But if ever we decide to
         // allow for parallel commits, then we need to be more careful here
         // to do it atomically.
-        __sync_synchronize();
+        memory_barrier();
 
         bool result = cmp_xchg(reinterpret_cast<Data * &>(data),
                                const_cast<Data * &>(old_data),
@@ -348,7 +348,7 @@ public:
             d = get_data();
             d->pop_back();
             d->back().valid_to = 1;  // probably unnecessary...
-            __sync_synchronize();
+            memory_barrier();
         } while (d != data);
 #endif
     }

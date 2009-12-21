@@ -7,6 +7,8 @@
 
 #include "sandbox.h"
 #include "transaction.h"
+#include "arch/atomic_ops.h"
+
 
 using namespace std;
 
@@ -67,7 +69,7 @@ commit(Epoch old_epoch)
         set_current_epoch(new_epoch);
 
         // Make sure these writes are seen before we clean up
-        __sync_synchronize();
+        memory_barrier();
 
         // Success: we are in a new epoch
         for (it = local_values.begin(); it != end;  ++it)

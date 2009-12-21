@@ -6,6 +6,7 @@
 #include "snapshot.h"
 #include "transaction.h"
 #include "utils/pair_utils.h"
+#include "arch/atomic_ops.h"
 
 
 using namespace std;
@@ -505,7 +506,7 @@ compress_epochs()
         }
 
         // Make sure writes are visible before we continue
-        __sync_synchronize();
+        memory_barrier();
 
         cerr << "renaming epochs" << endl;
         dump_unlocked();
@@ -517,7 +518,7 @@ compress_epochs()
             (*jt)->rename_epoch(old_epoch, new_epoch);
 
         // Make sure writes are visible before we continue
-        __sync_synchronize();
+        memory_barrier();
 
         if (entries.count(new_epoch))
             throw Exception("new epoch already there");
