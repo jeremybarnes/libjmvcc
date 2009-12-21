@@ -36,6 +36,9 @@ void schedule_cleanup(const boost::function<void ()> & cleanup);
 /// For testing; count how many cleanups need to be performed
 void num_outstanding_cleanups();
 
+/// For testing: dump the status of the garbage collector to cerr
+void dump_garbage_status();
+
 } // namespace JMVCC
 
 #endif /* __jmvcc__garbage_h__ */
