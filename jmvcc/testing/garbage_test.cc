@@ -56,16 +56,19 @@ BOOST_AUTO_TEST_CASE(test1)
     int v = 0;
 
     cerr << "before critical" << endl;
+    validate_garbage_status();
     dump_garbage_status();
 
     enter_critical();
 
     cerr << "in critical" << endl;
+    validate_garbage_status();
     dump_garbage_status();
 
     schedule_cleanup(Set_Var(v, 1));
 
     cerr << "after cleanup" << endl;
+    validate_garbage_status();
     dump_garbage_status();
 
     BOOST_CHECK_EQUAL(v, 0);
@@ -73,6 +76,7 @@ BOOST_AUTO_TEST_CASE(test1)
     leave_critical();
 
     cerr << "out of critical" << endl;
+    validate_garbage_status();
     dump_garbage_status();
 
     BOOST_CHECK_EQUAL(v, 1);
@@ -188,6 +192,8 @@ void run_garbage_test(int nthreads, int niter)
     
     tg.join_all();
 
+    cerr << "garbage collector status at end" << endl;
+    validate_garbage_status();
     dump_garbage_status();
 
     BOOST_CHECK_EQUAL(errors, 0);

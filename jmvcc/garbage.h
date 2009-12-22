@@ -56,6 +56,9 @@ void num_outstanding_cleanups();
 /// For testing: dump the status of the garbage collector to cerr
 void dump_garbage_status();
 
+/// Testing again: validate the status of the garbage collector
+void validate_garbage_status(bool verbose = false);
+
 } // namespace JMVCC
 
 #endif /* __jmvcc__garbage_h__ */
