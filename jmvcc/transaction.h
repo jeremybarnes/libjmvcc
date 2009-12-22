@@ -34,9 +34,17 @@ void no_transaction_exception(const Versioned_Object * obj) __attribute__((__nor
 /// A transaction is both a snapshot and a sandbox.
 struct Transaction : public Snapshot, public Sandbox {
 
+    Transaction(bool use_critical = true)
+        : use_critical(use_critical)
+    {
+    }
+
     bool commit();
 
     void dump(std::ostream & stream = std::cerr, int indent = 0);
+
+    // Do we use critical sections?
+    bool use_critical;
 };
 
 

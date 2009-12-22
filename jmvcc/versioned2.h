@@ -13,6 +13,8 @@
 #include "utils/circular_buffer.h"
 #include "arch/cmp_xchg.h"
 #include "arch/atomic_ops.h"
+#include "garbage.h"
+
 
 namespace JMVCC {
 
@@ -132,7 +134,7 @@ private:
 
         ~Data()
         {
-            for (unsigned i = 0;  i < size;  ++i)
+            for (unsigned i = 0;  i < size();  ++i)
                 history[i].value.~T();
         }
 
@@ -246,7 +248,7 @@ private:
 
     static void delete_data(Data * data)
     {
-        // For the moment, we leak, until we get GC working
+        schedule_cleanup(Delete_Object<Data>(data));
     }
 
     static Data * new_data(size_t capacity)

@@ -55,6 +55,8 @@ vector<boost::function<void ()> > cleanups_prev, cleanups_curr;
 
 void enter_critical()
 {
+    cerr << "enter_critical" << endl;
+
     if (t_current_critical != 0) {
         ++t_current_nesting;
         return;
@@ -69,8 +71,12 @@ void enter_critical()
 
 void leave_critical()
 {
-    if (t_current_nesting == 0)
+    cerr << "leave_critical" << endl;
+
+    if (t_current_nesting == 0) {
+        dump_garbage_status();
         throw Exception("badly nested critical sections");
+    }
     --t_current_nesting;
     if (t_current_nesting == 0) {
         vector<boost::function<void ()> > to_cleanup;
@@ -113,10 +119,18 @@ void leave_critical()
     }
 }
 
+void new_critical()
+{
+    leave_critical();
+    enter_critical();
+}
+
 void schedule_cleanup(const boost::function<void ()> & cleanup)
 {
-    if (t_current_critical == 0)
-        throw Exception("cannot schedule cleanup when not in critical section");
+    if (t_current_critical == 0) {
+        cleanup();
+        return;
+    }
 
     ACE_Guard<Spinlock> guard(cleanups_lock);
     if (t_current_critical == critical_info.current_critical)

@@ -31,6 +31,23 @@ size_t current_critical_section();
 // Same as enter_critical() then leave_critical()
 void new_critical();
 
+template<typename X>
+struct Delete_Object {
+    Delete_Object(X * x)
+        : x(x)
+    {
+    }
+
+    X * x;
+
+    void operator () ()
+    {
+        delete x;
+    }
+};
+
+
+
 void schedule_cleanup(const boost::function<void ()> & cleanup);
 
 /// For testing; count how many cleanups need to be performed

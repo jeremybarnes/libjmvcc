@@ -45,9 +45,9 @@ void do_versioned_test()
     BOOST_CHECK_EQUAL(var.history_size(), 0);
     BOOST_CHECK_EQUAL(var.read(), 0);
 
-    auto_ptr<Transaction> t1(new Transaction());
-    auto_ptr<Transaction> t2(new Transaction());
-    auto_ptr<Transaction> t2a(new Transaction());
+    auto_ptr<Transaction> t1(new Transaction(false /* use_critical */));
+    auto_ptr<Transaction> t2(new Transaction(false /* use_critical */));
+    auto_ptr<Transaction> t2a(new Transaction(false /* use_critical */));
 
     BOOST_CHECK_EQUAL(get_current_epoch(), 600);
 
@@ -82,7 +82,7 @@ void do_versioned_test()
         current_trans = 0;
     }
 
-    auto_ptr<Transaction> t3(new Transaction());
+    auto_ptr<Transaction> t3(new Transaction(false /* use_critical */));
 
     {
         current_trans = t3.get();

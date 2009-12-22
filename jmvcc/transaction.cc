@@ -38,9 +38,12 @@ commit()
     Epoch result = Sandbox::commit(epoch());
     status = result ? COMMITTED : FAILED;
     if (!result) restart();
-    leave_critical();
-    enter_critical();
+    
+    if (use_critical)
+        new_critical();
+
     set_epoch(result);
+
     return result;
 }
 

@@ -109,21 +109,6 @@ struct Checked_Object {
     int magic;
 };
 
-template<typename X>
-struct Delete_Object {
-    Delete_Object(X * x)
-        : x(x)
-    {
-    }
-
-    X * x;
-
-    void operator () ()
-    {
-        delete x;
-    }
-};
-
 struct Garbage_Torture_Thread {
 
     boost::barrier & barrier;
