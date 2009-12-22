@@ -170,6 +170,7 @@ struct Garbage_Torture_Thread {
 
 void run_garbage_test(int nthreads, int niter)
 {
+    cerr << endl << endl;
     cerr << "testing garbage with " << nthreads << " threads" << endl;
     boost::barrier barrier(nthreads);
     boost::thread_group tg;
@@ -206,6 +207,8 @@ void run_garbage_test(int nthreads, int niter)
 BOOST_AUTO_TEST_CASE(garbage_torture)
 {
     run_garbage_test(1, 10);
-    //run_garbage_test(2,  5000);
-    //run_garbage_test(10, 1000);
+    run_garbage_test(1, 10000);
+    run_garbage_test(2,  5000);
+    run_garbage_test(10, 1000);
+    run_garbage_test(100, 100);
 }
