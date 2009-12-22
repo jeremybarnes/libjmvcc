@@ -64,12 +64,14 @@ std::ostream & operator << (std::ostream & stream, CI_State state)
    we look at the parent field of the structure.  If it's */
 struct Critical_Info {
     Critical_Info()
-        : parent(0), child(0), finished_child(0), state(CI_LIVE)
+        : parent(0), child(0), state(CI_LIVE)
     {
     }
 
     ~Critical_Info()
     {
+        if (cleanups.size() || zombies.size())
+            throw Exception("Critical_Info dying with zombies or cleanups");
         state = CI_DEAD;
     }
 
@@ -80,17 +82,36 @@ struct Critical_Info {
     // Points to the child 
     Critical_Info * child;
 
-    // Points to a child that is finished, for which the parent has the
-    // responsibility to clean up.
-    Critical_Info * finished_child;
+    // All the zombies that need to be cleaned up
+    std::vector<Critical_Info *> zombies;
     
     // The thread itself manipulates this list; no locks
     Cleanups cleanups;
 
     CI_State state;
+
+    void cleanup()
+    {
+        if (state != CI_ZOMBIE)
+            throw Exception("cleaning up non-zombie: "
+                            + print(state));
+
+        for (unsigned i = 0;  i < zombies.size();  ++i) {
+            zombies[i]->cleanup();
+            delete zombies[i];
+        }
+
+        zombies.clear();
+
+        for (unsigned i = 0;  i != cleanups.size();  ++i) {
+            cleanups[i]();
+        }
+
+        cleanups.clear();
+    }
 };
 
-typedef Spinlock Critical_Lock;
+typedef ACE_Mutex Critical_Lock;
 Critical_Lock critical_lock;
 
 /// Global pointer to the latest critical info structure.
@@ -133,7 +154,10 @@ void enter_critical()
     if (t_critical->parent)
         t_critical->parent->child = t_critical;
 
-    validate_garbage_status_unlocked();
+    if (last_info && last_info->child != 0)
+        throw Exception("last_info child should be null 0");
+
+    //validate_garbage_status_unlocked();
 }
 
 void leave_critical()
@@ -154,44 +178,67 @@ void leave_critical()
        ourself to the list of things for our parent to clean up. */
     ACE_Guard<Critical_Lock> guard(critical_lock);
 
-    if (t_critical->parent == 0) {
+    if (t_critical->state != CI_LIVE)
+        throw Exception("t_critical should be live: "
+                        + print(t_critical->state));
+
+    t_critical->state = CI_ZOMBIE;
+
+    Critical_Info * parent = t_critical->parent;
+
+    if (parent == 0) {
         /* We are ready to clean up everything.  First, detach us from the
            list, with the lock held. */
+        
+        if (t_critical->child && last_info == t_critical) {
+            cerr << "t_critical         = " << t_critical << endl;
+            cerr << "t_critical->parent = " << t_critical->parent << endl;
+            cerr << "t_critical->child  = " << t_critical->child << endl;
+            cerr << "last_info          = " << last_info << endl;
+            cerr << "t_critical->child->state = " << t_critical->child->state
+                 << endl;
+            throw Exception("last_info pointers out of sync");
+        }
+
         if (t_critical->child) {
             //ACE_Guard<Spinlock> guard(critical_lock);
-            if (t_critical->child)
-                t_critical->child->parent = 0;
+            t_critical->child->parent = 0;
             t_critical->child = 0;
         } else last_info = 0;
+
+        if (last_info && last_info->child != 0)
+            throw Exception("last_info child should be null 1");
 
         // Nothing points to us anymore (our parent is null and our child now
         // has a different parent) so we don't need to lock the pointers
         // anymore.
         //guard.release(); // TO UNCOMMENT
 
-        /* Now go through and clean up. */
-        Critical_Info * current = t_critical, * next;
-        while (current) {
-            next = current->finished_child;
-            for (unsigned i = 0;  i < current->cleanups.size();  ++i)
-                current->cleanups[i]();
-            delete current;
-            current = next;
-        }
+        t_critical->cleanup();
+        delete t_critical;
     }
     else {
+        if (parent->state != CI_LIVE)
+            throw Exception("parent wasn't live: " + print(parent->state));
+
+        if (last_info && last_info->child != 0)
+            throw Exception("last_info child should be null 1.9");
+        
         /* Our child now has our parent as a parent */
+        parent->child = t_critical->child;
         if (t_critical->child)
-            t_critical->child->parent = t_critical->parent;
-        else last_info = t_critical->parent;
-        t_critical->finished_child = t_critical->parent->finished_child;
-        t_critical->parent->finished_child = t_critical;
-        t_critical->state = CI_ZOMBIE;
+            t_critical->child->parent = parent;
+        else last_info = parent;
+        parent->zombies.push_back(t_critical);
+
+        if (last_info && last_info->child != 0) {
+            throw Exception("last_info child should be null 2");
+        }
     }
 
     t_critical = 0;
 
-    validate_garbage_status_unlocked();
+    //validate_garbage_status_unlocked();
 }
 
 void new_critical()
@@ -236,11 +283,12 @@ void dump_garbage_status()
         num_live_threads += 1;
         num_zombie_objects += info->cleanups.size();
         cerr << "  zombies:" << endl;
-        int nz = 0;
-        for (Critical_Info * zombie = info->finished_child;  zombie;
-             zombie = zombie->finished_child, ++nz) {
-            cerr << "    zombie " << nz << " at " << zombie
+
+        for (unsigned i = 0;  i < info->zombies.size();  ++i) {
+            Critical_Info * zombie = info->zombies[i];
+            cerr << "    zombie " << i << " at " << zombie
                  << " with " << zombie->cleanups.size() << " cleanups"
+                 << zombie->zombies.size() << " sub-zombies"
                  << " state " << info->state << endl;
             num_zombie_objects += zombie->cleanups.size();
         }
@@ -280,8 +328,13 @@ void validate_garbage_status_unlocked(bool verbose)
 
     bool has_error = false;
 
+    if (last_info && last_info->child != 0)
+        throw Exception("last_info child should be null");
+
     int n = 0;
-    for (Critical_Info * info = last_info;  info;  info=info->parent, ++n) {
+    for (Critical_Info * info = last_info, * prev = 0;  info;
+         prev = info, info=info->parent, ++n) {
+        
         bool has_cycle = live_seen.count(info);
         live_seen.insert(info);
         live_cycles += has_cycle;
@@ -300,18 +353,25 @@ void validate_garbage_status_unlocked(bool verbose)
         num_live_dead_objects += info->state == CI_DEAD;
         num_live_zombie_objects += info->state == CI_ZOMBIE;
 
-        if (info->state != CI_LIVE) has_error = true;
+        if (info->state != CI_LIVE) {
+            cerr << "info = " << info << endl;
+            cerr << "last_info = " << last_info << endl;
+            cerr << "bad state: " << info->state << endl;
+            has_error = true;
+            break;
+        }
 
         num_live_threads += 1;
         num_zombie_objects += info->cleanups.size();
-        int nz = 0;
 
         set<Critical_Info *> zombies_seen;
+        
+        //cerr << "info->zombies.size() = " << info->zombies.size() << endl;
 
-        for (Critical_Info * zombie = info->finished_child;  zombie;
-             zombie = zombie->finished_child, ++nz) {
-            
-            //cerr << "zombie = " << zombie << endl;
+        for (unsigned i = 0;  i < info->zombies.size();  ++i) {
+            Critical_Info * zombie = info->zombies[i];
+
+            //cerr << "i = " << i << "zombie = " << zombie << endl;
 
             bool has_cycle = zombies_seen.count(zombie);
             zombies_seen.insert(zombie);
