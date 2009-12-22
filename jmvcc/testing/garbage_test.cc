@@ -45,6 +45,8 @@ struct Set_Var {
 
     void operator () ()
     {
+        cerr << "setting var at " << this << " from " << var
+             << " to " << val << endl;
         var = val;
     }
 };
@@ -173,6 +175,8 @@ void run_garbage_test(int nthreads, int niter)
     boost::thread_group tg;
 
     Checked_Object * vals[nthreads];
+    for (unsigned i = 0;  i < nthreads;  ++i)
+        vals[i] = new Checked_Object(0);
 
     int errors = 0;
 
@@ -183,15 +187,25 @@ void run_garbage_test(int nthreads, int niter)
     
     tg.join_all();
 
+    dump_garbage_status();
+
     BOOST_CHECK_EQUAL(errors, 0);
+    BOOST_CHECK_EQUAL(num_live, nthreads);
+
+    for (unsigned i = 0;  i < nthreads;  ++i) {
+        BOOST_CHECK_EQUAL(vals[i]->get(), niter - 1);
+        delete vals[i];
+    }
+
     BOOST_CHECK_EQUAL(num_live, 0);
 
+    cerr << "max_num_live = " << max_num_live << endl;
     cerr << "elapsed: " << timer.elapsed() << endl;
 }
 
 BOOST_AUTO_TEST_CASE(garbage_torture)
 {
-    run_garbage_test(1, 10000);
+    run_garbage_test(1, 10);
     //run_garbage_test(2,  5000);
     //run_garbage_test(10, 1000);
 }
