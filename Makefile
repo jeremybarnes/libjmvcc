@@ -29,8 +29,4 @@ include $(JML_TOP)/rules.mk
 $(shell echo GOALS := $(MAKECMDGOALS) > .target.mk)
 endif
 
-
-
-$(eval $(call add_sources,exception_hook.cc))
-
 $(eval $(call include_sub_makes,jmvcc))

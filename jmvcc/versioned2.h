@@ -190,8 +190,12 @@ private:
 
         void push_back(const Entry & entry)
         {
-            if (last == capacity)
+            if (last == capacity) {
+                using namespace std;
+                cerr << "last = " << last << endl;
+                cerr << "capacity = " << capacity << endl;
                 throw Exception("can't push back");
+            }
             new (&history[last].value) T(entry.value);
             history[last].valid_to = entry.valid_to;
             
@@ -246,9 +250,24 @@ private:
         return reinterpret_cast<const Data *>(data);
     }
 
+    struct Delete_Data {
+        Delete_Data(Data * data)
+            : data(data)
+        {
+        }
+
+        void operator () ()
+        {
+            data->~Data();
+            free(data);
+        }
+
+        Data * data;
+    };
+
     static void delete_data(Data * data)
     {
-        schedule_cleanup(Delete_Object<Data>(data));
+        schedule_cleanup(Delete_Data(data));
     }
 
     static Data * new_data(size_t capacity)

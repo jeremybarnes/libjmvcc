@@ -1,5 +1,4 @@
 JMVCC_SOURCES := \
-	../exception_hook.cc \
 	snapshot.cc \
 	sandbox.cc \
 	transaction.cc \

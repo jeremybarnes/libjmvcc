@@ -251,10 +251,11 @@ void schedule_cleanup(const boost::function<void ()> & cleanup)
 {
     ACE_Guard<Critical_Lock> guard(critical_lock); // TO REMOVE
     if (t_critical == 0) {
-        /* We're not in a critical section, so we don't offer any
-           guarantees about this data staying around.  Mostly, this code
-           path will just be used for testing. */
-        cleanup();
+        if (!last_info) {
+            cleanup();
+            return;
+        }
+        last_info->cleanups.push_back(cleanup);
         return;
     }
 
