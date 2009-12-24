@@ -1,6 +1,7 @@
-/* object_test.cc Jeremy Barnes, 21 September 2009 Copyright (c) 2009
-   Jeremy Barnes.  All rights reserved.
-
+/* object_test.cc
+   Jeremy Barnes, 21 September 2009
+   Copyright (c) 2009 Jeremy Barnes.  All rights reserved.
+   
    Test for the set functionality.
 */
 
@@ -37,7 +38,10 @@ using boost::unit_test::test_suite;
 
 #if 1
 
-BOOST_AUTO_TEST_CASE( test0 )
+namespace JMVCC {
+
+template<class Var>
+void test0_type()
 {
     // Check basic invariants
     BOOST_CHECK_EQUAL(current_trans, (Transaction *)0);
@@ -45,11 +49,14 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     size_t starting_epoch = get_current_epoch();
 
-    Versioned<int> myval(6);
+    Var myval(6);
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
     BOOST_CHECK_EQUAL(myval.history_size(), 0);
-    BOOST_CHECK_EQUAL(myval.read(), 6);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(myval.read(), 6);
+    }
     
     {
         // Should throw an exception when we mutate out of a transaction
@@ -59,7 +66,11 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     // Check strong exception safety
     BOOST_CHECK_EQUAL(myval.history_size(), 0);
-    BOOST_CHECK_EQUAL(myval.read(), 6);
+
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(myval.read(), 6);
+    }
 
     cerr << "------------------ at start" << endl;
     snapshot_info.dump();
@@ -111,12 +122,25 @@ BOOST_AUTO_TEST_CASE( test0 )
     cerr << "------------------ end at end" << endl;
 
     BOOST_CHECK_EQUAL(myval.history_size(), 0);
-    BOOST_CHECK_EQUAL(myval.read(), 6);
+
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(myval.read(), 6);
+    }
+
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
     BOOST_CHECK_EQUAL(get_current_epoch(), starting_epoch + 1);
 
     current_epoch_ = 1;
     earliest_epoch_ = 1;
+}
+
+} // namespace JMVCC
+
+BOOST_AUTO_TEST_CASE( test0 )
+{
+    test0_type<Versioned<int> >();
+    test0_type<Versioned2<int> >();
 }
 
 #endif
@@ -137,7 +161,11 @@ void object_test_thread(Var & var, int iter,
         //Guard guard(lock);
 
         // Keep going until we succeed
-        int old_val = var.read();
+        int old_val;
+        {
+            Local_Transaction trans;
+            old_val = var.read();
+        }
 #if 0
         cerr << endl << "=======================" << endl;
         cerr << "i = " << i << " old_val = " << old_val << endl;
@@ -261,16 +289,24 @@ void object_test_thread(Var & var, int iter,
             cerr << "-------------" << endl;
 #endif
             
-            if (var.read() % 2 != 0) {
-                ++errors;
-                cerr << "val should be even after trans: " << var.read()
-                     << endl;
+            {
+                Local_Transaction trans;
+                if (var.read() % 2 != 0) {
+                    ++errors;
+                    cerr << "val should be even after trans: " << var.read()
+                         << endl;
+                }
             }
             
-            //BOOST_CHECK_EQUAL(var.read() % 2, 0);
         }
 
-        int new_val = var.read();
+        int new_val;
+        
+        {
+            Local_Transaction trans;
+            new_val = var.read();
+        }
+
         if (new_val <= old_val) {
             ++errors;
             cerr << "no progress made: " << new_val << " <= " << old_val
@@ -324,7 +360,11 @@ void run_object_test(int nthreads, int niter)
 #endif
 
     BOOST_CHECK_EQUAL(val.history_size(), 0);
-    BOOST_CHECK_EQUAL(val.read(), niter * nthreads * 2);
+
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(val.read(), niter * nthreads * 2);
+    }
 }
 
 #if 1
@@ -332,7 +372,7 @@ BOOST_AUTO_TEST_CASE( test1 )
 {
     //run_object_test(1, 10000);
     //run_object_test(10, 1000);
-    run_object_test<Versioned2<int> >(1, 100000);
+    //run_object_test<Versioned2<int> >(1, 100000);
     run_object_test<Versioned2<int> >(10, 10000);
 
     run_object_test<Versioned<int> >(1, 100000);
@@ -436,8 +476,11 @@ void run_object_test2(int nthreads, int niter, int nvals)
     cerr << "elapsed: " << timer.elapsed() << endl;
 
     ssize_t total = 0;
-    for (unsigned i = 0;  i < nvals;  ++i)
-        total += vals[i].read();
+    {
+        Local_Transaction trans;
+        for (unsigned i = 0;  i < nvals;  ++i)
+            total += vals[i].read();
+    }
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
 

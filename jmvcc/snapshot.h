@@ -24,6 +24,8 @@ class test0;   // for testing code
 
 namespace JMVCC {
 
+template<class Var> void test0_type();  // testing code
+
 using namespace ML;
 
 /// Global variable giving the number of committed transactions since the
@@ -131,6 +133,7 @@ private:
     void perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard);
     
     friend class ::test0;
+    template<class Var> friend void test0_type();
 };
 
 extern Snapshot_Info snapshot_info;
