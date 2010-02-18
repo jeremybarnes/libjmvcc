@@ -137,6 +137,7 @@ void test0_type()
 
 } // namespace JMVCC
 
+
 BOOST_AUTO_TEST_CASE( test0 )
 {
     test0_type<Versioned<int> >();
@@ -145,6 +146,148 @@ BOOST_AUTO_TEST_CASE( test0 )
 
 #endif
 
+template<class Var>
+void object_test_thread_x(Var & var, int iter,
+                          boost::barrier & barrier,
+                          size_t & failures,
+                          int thread_id)
+{
+    // Wait for all threads to start up before we continue
+    barrier.wait();
+
+    int errors = 0;
+    int local_failures = 0;
+
+    for (unsigned i = 0;  i < iter;  ++i) {
+
+        // Keep going until we succeed
+        int old_val;
+        {
+            Local_Transaction trans;
+            old_val = var.read();
+        }
+        {
+            if (thread_id == 0) {
+                Local_Transaction trans;
+                int tries = 0;
+                do {
+                    ++tries;
+                    int & val = var.mutate();
+                    
+
+                    
+                    if (val % 2 != 0) {
+                        cerr << "val should be even: " << val << endl;
+                        ++errors;
+                    }
+                    
+                    val += 1;
+                    if (val % 2 != 1) {
+                        cerr << "val should be odd: " << val << endl;
+                        ++errors;
+                    }
+                    
+                    val += 1;
+                    if (val % 2 != 0) {
+                        cerr << "val should be even 2: " << val << endl;
+                        ++errors;
+                    }
+                } while (!trans.commit());
+
+                local_failures += tries - 1;
+            
+                if (var.read() % 2 != 0) {
+                    ++errors;
+                    cerr << "val should be even after trans: " << var.read()
+                         << endl;
+                }
+            }
+            
+            {
+                Local_Transaction trans;
+                if (var.read() % 2 != 0) {
+                    ++errors;
+                    cerr << "val should be even after trans: " << var.read()
+                         << endl;
+                }
+            }
+        }
+
+        int new_val;
+        
+        {
+            Local_Transaction trans;
+            new_val = var.read();
+        }
+
+        if (new_val <= old_val && thread_id == 0) {
+            ++errors;
+            cerr << "no progress made: " << new_val << " <= " << old_val
+                 << " current_epoch " << get_current_epoch() << endl ;
+            var.dump();
+        }
+        //BOOST_CHECK(var.read() > old_val);
+    }
+
+    static Lock lock;
+    Guard guard(lock);
+
+    BOOST_CHECK_EQUAL(errors, 0);
+
+    failures += local_failures;
+}
+
+template<class Var>
+void run_object_test_x(int nthreads, int niter)
+{
+    cerr << "testing with " << nthreads << " threads and " << niter << " iter"
+         << " class " << demangle(typeid(Var).name()) << endl;
+    Var val(0);
+    boost::barrier barrier(nthreads);
+    boost::thread_group tg;
+
+    size_t failures = 0;
+
+    Timer timer;
+    for (unsigned i = 0;  i < nthreads;  ++i)
+        tg.create_thread(boost::bind(&object_test_thread_x<Var>, boost::ref(val),
+                                     niter,
+                                     boost::ref(barrier),
+                                     boost::ref(failures),
+                                     i));
+    
+    tg.join_all();
+
+    cerr << "elapsed: " << timer.elapsed() << endl;
+
+    cerr << "val.history.entries.size() = " << val.history_size()
+         << endl;
+
+    cerr << "current_epoch = " << get_current_epoch() << endl;
+    cerr << "failures: " << failures << endl;
+
+#if 0
+    cerr << "current_epoch: " << current_epoch << endl;
+    for (unsigned i = 0;  i < val.history.entries.size();  ++i)
+        cerr << "value at epoch " << val.history.entries[i].epoch << ": "
+             << val.history.entries[i].value << endl;
+#endif
+
+    BOOST_CHECK_EQUAL(val.history_size(), 0);
+
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(val.read(), niter * 2);
+    }
+}
+
+BOOST_AUTO_TEST_CASE( testx )
+{
+    for (unsigned i = 0;  i < 10;  ++i)
+        run_object_test_x<Versioned2<int> >(2,  50000);
+}
+
+#if 0
 template<class Var>
 void object_test_thread(Var & var, int iter,
                         boost::barrier & barrier,
@@ -523,3 +666,5 @@ BOOST_AUTO_TEST_CASE( test2 )
     cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()
          << "s" << endl;
 }
+
+#endif
