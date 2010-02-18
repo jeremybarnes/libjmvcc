@@ -8,9 +8,9 @@
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_DYN_LINK
 
-#include "utils/string_functions.h"
-#include "utils/vector_utils.h"
-#include "utils/pair_utils.h"
+#include "jml/utils/string_functions.h"
+#include "jml/utils/vector_utils.h"
+#include "jml/utils/pair_utils.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 #include <iostream>
@@ -19,11 +19,11 @@
 #include <boost/bind.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/timer.hpp>
-#include "arch/exception_handler.h"
-#include "arch/threads.h"
+#include "jml/arch/exception_handler.h"
+#include "jml/arch/threads.h"
 #include <set>
-#include "arch/timers.h"
-#include "arch/backtrace.h"
+#include "jml/arch/timers.h"
+#include "jml/arch/backtrace.h"
 #include <sched.h>
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"
@@ -39,11 +39,15 @@ template<class Var>
 void do_versioned_test()
 {
     current_epoch_ = 600;
+    earliest_epoch_ = 600;
 
     Var var(0);
 
     BOOST_CHECK_EQUAL(var.history_size(), 0);
-    BOOST_CHECK_EQUAL(var.read(), 0);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 0);
+    }
 
     auto_ptr<Transaction> t1(new Transaction(false /* use_critical */));
     auto_ptr<Transaction> t2(new Transaction(false /* use_critical */));
@@ -71,7 +75,10 @@ void do_versioned_test()
         current_trans = 0;
     }
 
-    BOOST_CHECK_EQUAL(var.read(), 1);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 1);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 1);
 
     {
@@ -106,7 +113,10 @@ void do_versioned_test()
         current_trans = 0;
     }
     
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 2);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 2);
 
     {
@@ -130,7 +140,10 @@ void do_versioned_test()
     BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(600, &var), 1);
     BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(601, &var), 601);
         
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 2);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 2);
 
     {
@@ -159,7 +172,10 @@ void do_versioned_test()
 
     delete t1.release();
 
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 2);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 1);
 
     BOOST_CHECK_EQUAL(snapshot_info.has_cleanup(600, &var), 1);
@@ -185,7 +201,10 @@ void do_versioned_test()
 
     delete t3.release();
 
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 2);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 1);
 
     {
@@ -196,22 +215,21 @@ void do_versioned_test()
 
     delete t2.release();
 
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    {
+        Local_Transaction t;
+        BOOST_CHECK_EQUAL(var.read(), 2);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 0);
 }
 
-#if 1
 BOOST_AUTO_TEST_CASE( test0 )
 {
     do_versioned_test<Versioned<int> >();
 }
-#endif
 
-#if 1
 BOOST_AUTO_TEST_CASE( test1 )
 {
     cerr << endl << "================ versioned2" << endl;
 
     do_versioned_test<Versioned2<int> >();
 }
-#endif

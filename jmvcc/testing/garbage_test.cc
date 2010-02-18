@@ -164,6 +164,8 @@ struct Garbage_Torture_Thread {
             vals[thread] = new Checked_Object(iter);
 
             schedule_cleanup(Delete_Object<Checked_Object>(old));
+
+            BOOST_CHECK(num_outstanding_cleanups() > 0);
             
             leave_critical();
         }
@@ -215,6 +217,7 @@ BOOST_AUTO_TEST_CASE(garbage_torture)
     run_garbage_test(1, 10);
     run_garbage_test(1, 10000);
     run_garbage_test(2,  5000);
+    run_garbage_test(2,  5000000);
     run_garbage_test(10, 1000);
     run_garbage_test(100, 100);
 }
