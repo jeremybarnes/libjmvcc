@@ -8,7 +8,7 @@
 #ifndef __jmvcc__versioned_h__
 #define __jmvcc__versioned_h__
 
-#include "utils/circular_buffer.h"
+#include "jml/utils/circular_buffer.h"
 #include "versioned_object.h"
 #include <ace/Synch.h>
 

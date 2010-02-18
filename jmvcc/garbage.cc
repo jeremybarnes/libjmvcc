@@ -6,16 +6,16 @@
 */
 
 #include "garbage.h"
-#include "arch/exception.h"
+#include "jml/arch/exception.h"
 #include "spinlock.h"
-#include "arch/cmp_xchg.h"
+#include "jml/arch/cmp_xchg.h"
 #include <ace/Synch.h>
 #include <vector>
 #include <iostream>
-#include "utils/hash_map.h"
+#include "jml/utils/hash_map.h"
 #include <set>
-#include "utils/string_functions.h"
-#include "arch/backtrace.h"
+#include "jml/utils/string_functions.h"
+#include "jml/arch/backtrace.h"
 
 using namespace std;
 using namespace ML;
@@ -157,7 +157,7 @@ void enter_critical()
     if (last_info && last_info->child != 0)
         throw Exception("last_info child should be null 0");
 
-    validate_garbage_status_unlocked();
+    //validate_garbage_status_unlocked();
 }
 
 void leave_critical()
@@ -240,7 +240,7 @@ void leave_critical()
 
     t_critical = 0;
 
-    validate_garbage_status_unlocked();
+    //validate_garbage_status_unlocked();
 }
 
 void new_critical()

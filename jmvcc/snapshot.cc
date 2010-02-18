@@ -5,8 +5,8 @@
 
 #include "snapshot.h"
 #include "transaction.h"
-#include "utils/pair_utils.h"
-#include "arch/atomic_ops.h"
+#include "jml/utils/pair_utils.h"
+#include "jml/arch/atomic_ops.h"
 
 
 using namespace std;

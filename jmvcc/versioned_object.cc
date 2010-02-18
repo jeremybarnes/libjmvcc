@@ -6,7 +6,7 @@
 */
 
 #include "versioned_object.h"
-#include "utils/string_functions.h"
+#include "jml/utils/string_functions.h"
 
 using namespace std;
 

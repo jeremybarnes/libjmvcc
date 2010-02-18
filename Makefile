@@ -14,7 +14,7 @@ JML_TOP := jml
 
 include $(JML_TOP)/arch/$(ARCH).mk
 
-CXXFLAGS += -Ijml -Wno-deprecated
+CXXFLAGS += -I. -Wno-deprecated
 CXXLINKFLAGS += -Ljml/../build/$(ARCH)/bin -Wl,--rpath,jml/../build/$(ARCH)/bin
 
 ifeq ($(MAKECMDGOALS),failed)

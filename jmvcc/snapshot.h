@@ -8,14 +8,14 @@
 #ifndef __jmvcc__snapshot_h__
 #define __jmvcc__snapshot_h__
 
-#include "arch/exception.h"
+#include "jml/arch/exception.h"
 #include <map>
 #include <set>
 #include <vector>
 #include <iostream>
-#include "ace/Mutex.h"
-#include "ace/Synch.h"
-#include "utils/string_functions.h"
+#include <ace/Mutex.h>
+#include <ace/Synch.h>
+#include "jml/utils/string_functions.h"
 #include <boost/utility.hpp>
 #include "jmvcc_defs.h"
 #include "spinlock.h"

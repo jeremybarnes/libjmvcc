@@ -9,8 +9,8 @@
 #define __jmvcc__sandbox_h__
 
 
-#include "utils/lightweight_hash.h"
-#include "utils/string_functions.h"
+#include "jml/utils/lightweight_hash.h"
+#include "jml/utils/string_functions.h"
 #include "versioned_object.h"
 #include <boost/tuple/tuple.hpp>
 

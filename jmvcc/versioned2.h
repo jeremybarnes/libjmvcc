@@ -10,9 +10,9 @@
 
 #include <iostream> // debug
 #include "versioned.h"
-#include "utils/circular_buffer.h"
-#include "arch/cmp_xchg.h"
-#include "arch/atomic_ops.h"
+#include "jml/utils/circular_buffer.h"
+#include "jml/arch/cmp_xchg.h"
+#include "jml/arch/atomic_ops.h"
 #include "garbage.h"
 
 

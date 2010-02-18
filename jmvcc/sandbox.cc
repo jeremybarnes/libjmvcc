@@ -7,7 +7,7 @@
 
 #include "sandbox.h"
 #include "transaction.h"
-#include "arch/atomic_ops.h"
+#include "jml/arch/atomic_ops.h"
 
 
 using namespace std;
