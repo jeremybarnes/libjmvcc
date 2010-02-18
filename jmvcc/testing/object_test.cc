@@ -373,6 +373,7 @@ BOOST_AUTO_TEST_CASE( test1 )
     //run_object_test(1, 10000);
     //run_object_test(10, 1000);
     //run_object_test<Versioned2<int> >(1, 100000);
+    run_object_test<Versioned2<int> >(2,  50000);
     run_object_test<Versioned2<int> >(10, 10000);
 
     run_object_test<Versioned<int> >(1, 100000);
@@ -457,7 +458,7 @@ struct Object_Test_Thread2 {
 template<class Var>
 void run_object_test2(int nthreads, int niter, int nvals)
 {
-    cerr << endl << "testing with " << nthreads << " threads and "
+    cerr << endl << "testing 2 with " << nthreads << " threads and "
          << niter << " iter"
          << " class " << demangle(typeid(Var).name()) << endl;
     Var vals[nvals];

@@ -123,6 +123,7 @@ private:
             zombied_for = 0;
             destroyed_at = 0;
             destroyed_for = 0;
+            deleted_at = 0;
         }
 
         Data(size_t capacity, const Data & old_data)
@@ -134,6 +135,7 @@ private:
             zombied_for = 0;
             destroyed_at = 0;
             destroyed_for = 0;
+            deleted_at = 0;
 
             for (unsigned i = 0;  i < old_data.size();  ++i)
                 push_back(old_data.element(i));
@@ -149,6 +151,7 @@ private:
         mutable Epoch zombied_for;
         Epoch destroyed_at;
         Epoch destroyed_for;
+        Epoch deleted_at;
         Entry history[1];  // real ones are allocated after
 
         uint32_t size() const { cm();  return last - first; }
@@ -286,6 +289,7 @@ private:
                 cerr << "created_at     = " << created_at << endl;
                 cerr << "created_for    = " << created_for << endl;
                 cerr << "zombied_at     = " << zombied_at << endl;
+                cerr << "deleted_at     = " << deleted_at << endl;
                 cerr << "destroyed_at   = " << destroyed_at << endl;
                 cerr << "destroyed_for  = " << destroyed_for << endl;
                 cerr << "magic = " << magic << endl;
@@ -304,19 +308,21 @@ private:
 
     struct Delete_Data {
         Delete_Data(Data * data)
-            : data(data)
+            : data(data), epoch(get_current_epoch())
         {
         }
 
         void operator () ()
         {
             data->~Data();
+            data->deleted_at = epoch;
             data->destroyed_at = get_current_epoch();
-            data->destroyed_for = (current_trans ? current_trans->epoch() : 0);
+            data->destroyed_for = (current_trans ? current_trans->epoch() : -1);
             //free(data);  // DEBUG
         }
 
         Data * data;
+        Epoch epoch;
     };
 
     static void delete_data(Data * data)

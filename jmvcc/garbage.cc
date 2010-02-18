@@ -157,7 +157,7 @@ void enter_critical()
     if (last_info && last_info->child != 0)
         throw Exception("last_info child should be null 0");
 
-    //validate_garbage_status_unlocked();
+    validate_garbage_status_unlocked();
 }
 
 void leave_critical()
@@ -214,6 +214,8 @@ void leave_critical()
         // anymore.
         //guard.release(); // TO UNCOMMENT
 
+        //validate_garbage_status_unlocked();
+
         t_critical->cleanup();
         delete t_critical;
     }
@@ -238,7 +240,7 @@ void leave_critical()
 
     t_critical = 0;
 
-    //validate_garbage_status_unlocked();
+    validate_garbage_status_unlocked();
 }
 
 void new_critical()
