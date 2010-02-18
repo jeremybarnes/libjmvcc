@@ -165,8 +165,6 @@ struct Garbage_Torture_Thread {
 
             schedule_cleanup(Delete_Object<Checked_Object>(old));
 
-            BOOST_CHECK(num_outstanding_cleanups() > 0);
-            
             leave_critical();
         }
 

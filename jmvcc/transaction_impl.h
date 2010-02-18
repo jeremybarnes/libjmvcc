@@ -23,7 +23,6 @@ inline
 Local_Transaction::
 Local_Transaction()
 {
-    enter_critical();
     old_trans = current_trans;
     current_trans = this;
 }
@@ -33,7 +32,6 @@ Local_Transaction::
 ~Local_Transaction()
 {
     current_trans = old_trans;
-    leave_critical();
 }
 
 } // namespace JMVCC

@@ -39,6 +39,8 @@ inline Epoch get_current_epoch()
 
 inline void set_current_epoch(Epoch val)
 {
+    if (val < current_epoch_)
+        throw Exception("current_epoch_ is decreasing");
     current_epoch_ = val;
 }
 
@@ -52,6 +54,9 @@ inline void set_earliest_epoch(Epoch val)
         cerr << "val = " << val << endl;
         cerr << "earliest_epoch = " << earliest_epoch_ << endl;
         throw Exception("earliest epoch was not increasing");
+    }
+    if (val > current_epoch_) {
+        throw Exception("earliest epoch after current epoch");
     }
     earliest_epoch_ = val;
 }

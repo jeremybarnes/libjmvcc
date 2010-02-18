@@ -36,7 +36,7 @@ using namespace std;
 
 using boost::unit_test::test_suite;
 
-#if 1
+#if 0
 
 namespace JMVCC {
 
@@ -487,6 +487,7 @@ void run_object_test2(int nthreads, int niter, int nvals)
 
     BOOST_CHECK_EQUAL(total, 0);
     for (unsigned i = 0;  i < nvals;  ++i) {
+        cerr << "current_epoch = " << get_current_epoch() << endl;
         if (vals[i].history_size() != 0)
             vals[i].dump();
         BOOST_CHECK_EQUAL(vals[i].history_size(), 0);

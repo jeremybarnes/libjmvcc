@@ -118,7 +118,7 @@ private:
             : capacity(capacity), first(0), last(0), magic(18273)
         {
             created_at = get_current_epoch();
-            created_for = (current_trans ? current_trans->epoch() : 0);
+            created_for = (current_trans ? current_trans->epoch() : -1);
             zombied_at = 0;
             zombied_for = 0;
             destroyed_at = 0;
@@ -318,6 +318,14 @@ private:
             data->deleted_at = epoch;
             data->destroyed_at = get_current_epoch();
             data->destroyed_for = (current_trans ? current_trans->epoch() : -1);
+
+            if (!current_trans && false) {
+                backtrace();
+                using namespace std;
+                cerr << "deleting data out of a transaction" << endl;
+                abort();
+            }
+
             //free(data);  // DEBUG
         }
 

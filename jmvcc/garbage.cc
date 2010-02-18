@@ -114,7 +114,9 @@ struct Critical_Info {
 typedef ACE_Mutex Critical_Lock;
 Critical_Lock critical_lock;
 
-/// Global pointer to the latest critical info structure.
+/// Global pointer to the latest critical info structure.  If this pointer is
+/// null, then it means that there are no critical sections active and so
+/// things can be deleted at will.
 Critical_Info * last_info = 0;
 
 /// Thread-specific data: what is the thread's critical info structure.  Null
@@ -251,6 +253,9 @@ void new_critical()
 
 void schedule_cleanup(const boost::function<void ()> & cleanup)
 {
+    if (!t_critical)
+        throw Exception("can't schedule cleanup outside critical section");
+
     ACE_Guard<Critical_Lock> guard(critical_lock); // TO REMOVE
     if (t_critical == 0) {
         if (!last_info) {

@@ -7,9 +7,9 @@
 #define BOOST_TEST_MAIN
 #define BOOST_TEST_DYN_LINK
 
-#include "utils/string_functions.h"
-#include "utils/vector_utils.h"
-#include "utils/pair_utils.h"
+#include "jml/utils/string_functions.h"
+#include "jml/utils/vector_utils.h"
+#include "jml/utils/pair_utils.h"
 #include <boost/test/unit_test.hpp>
 #include <boost/bind.hpp>
 #include <iostream>
@@ -18,11 +18,11 @@
 #include <boost/bind.hpp>
 #include <boost/tuple/tuple.hpp>
 #include <boost/timer.hpp>
-#include "arch/exception_handler.h"
-#include "arch/threads.h"
+#include "jml/arch/exception_handler.h"
+#include "jml/arch/threads.h"
 #include <set>
-#include "arch/timers.h"
-#include "arch/backtrace.h"
+#include "jml/arch/timers.h"
+#include "jml/arch/backtrace.h"
 #include <sched.h>
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"

@@ -10,6 +10,8 @@
 
 #include "snapshot.h"
 #include "sandbox.h"
+#include "garbage.h"
+
 
 namespace JMVCC {
 
@@ -39,6 +41,10 @@ struct Transaction : public Snapshot, public Sandbox {
     {
     }
 
+    ~Transaction()
+    {
+    }
+
     bool commit();
 
     void dump(std::ostream & stream = std::cerr, int indent = 0);
@@ -47,11 +53,23 @@ struct Transaction : public Snapshot, public Sandbox {
     bool use_critical;
 };
 
+struct In_Out_Critical {
+    In_Out_Critical()
+    {
+        enter_critical();
+    }
+    
+    ~In_Out_Critical()
+    {
+        leave_critical();
+    }
+};
+
 
 /*****************************************************************************/
 /* LOCAL_TRANSACTION                                                         */
 /*****************************************************************************/
-struct Local_Transaction : public Transaction {
+struct Local_Transaction : public In_Out_Critical, public Transaction {
     Local_Transaction();
 
     ~Local_Transaction();
