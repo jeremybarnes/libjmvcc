@@ -10,9 +10,7 @@
 
 #include <iostream> // debug
 #include "versioned.h"
-#include "jml/utils/circular_buffer.h"
 #include "jml/arch/cmp_xchg.h"
-#include "jml/arch/atomic_ops.h"
 #include "garbage.h"
 
 
@@ -36,14 +34,12 @@ template<typename T>
 struct Versioned2 : public Versioned_Object {
 
     explicit Versioned2(const T & val = T())
+        : data(new_data(val, 1))
     {
-        //static Info info;
-        data = new_data(val, 1);
     }
 
     ~Versioned2()
     {
-        delete_data(const_cast<Data *>(get_data()));
     }
 
     // Client interface.  Just two methods to get at the current value.
@@ -55,7 +51,7 @@ struct Versioned2 : public Versioned_Object {
         if (!local) {
             T value;
             {
-                value = get_data()->value_at_epoch(current_trans->epoch());
+                value = data.read()->value_at_epoch(current_trans->epoch());
             }
             local = current_trans->local_value<T>(this, value);
             
@@ -82,7 +78,7 @@ struct Versioned2 : public Versioned_Object {
         
         if (val) return *val;
         
-        const Data * d = get_data();
+        const Data * d = data.read();
 
         T result = d->value_at_epoch(current_trans->epoch());
         return result;
@@ -90,7 +86,7 @@ struct Versioned2 : public Versioned_Object {
 
     size_t history_size() const
     {
-        size_t result = get_data()->size() - 1;
+        size_t result = data.read()->size() - 1;
         return result;
     }
 
@@ -230,39 +226,19 @@ private:
         }
     };
 
-    // The single internal data member.  Updated atomically.
-    mutable Data * data;
-
-    const Data * get_data() const
-    {
-        return reinterpret_cast<const Data *>(data);
-    }
-
     struct Delete_Data {
-        Delete_Data(Data * data)
-            : data(data), epoch(get_current_epoch())
-        {
-        }
+        typedef void result_type;
 
-        void operator () ()
+        void operator () (Data * data) const
         {
             data->~Data();
             free(data);
         }
-
-        Data * data;
-        Epoch epoch;
     };
 
-    static void delete_data(Data * data)
-    {
-        schedule_cleanup(Delete_Data(data));
-    }
 
-    static void delete_data_now(Data * data)
-    {
-        Delete_Data do_it(data);
-    }
+    // The single internal data member.  Updated atomically.
+    RCU<Data, Delete_Data> data;
 
     static Data * new_data(size_t capacity)
     {
@@ -289,31 +265,13 @@ private:
         return d2;
     }
 
-    bool set_data(const Data * & old_data, Data * new_data)
-    {
-        // For the moment, the commit lock is held when we update this, so
-        // there is no possibility of conflict.  But if ever we decide to
-        // allow for parallel commits, then we need to be more careful here
-        // to do it atomically.
-        memory_barrier();
-
-        bool result = cmp_xchg(reinterpret_cast<Data * &>(data),
-                               const_cast<Data * &>(old_data),
-                               new_data);
-
-        if (!result) delete_data_now(new_data);
-        else delete_data(const_cast<Data *>(old_data));
-
-        return result;
-    }
-        
 public:
     // Implement object interface
 
     virtual bool setup(Epoch old_epoch, Epoch new_epoch, void * new_value)
     {
         for (;;) {
-            const Data * d = get_data();
+            const Data * d = data.read();
 
             if (new_epoch != get_current_epoch() + 1)
                 throw Exception("epochs out of order");
@@ -330,13 +288,13 @@ public:
             new_data->push_back(Entry(1 /* valid_to */,
                                       *reinterpret_cast<T *>(new_value)));
             
-            if (set_data(d, new_data)) return true;
+            if (data.publish(d, new_data)) return true;
         }
     }
 
     virtual void commit(Epoch new_epoch) throw ()
     {
-        const Data * d = get_data();
+        const Data * d = data.read();
 
         // Now that it's definitive, we have an older entry to clean up
         Epoch valid_from = 1;
@@ -349,17 +307,17 @@ public:
     virtual void rollback(Epoch new_epoch, void * local_data) throw ()
     {
 #if 1
-        const Data * d = get_data();
+        const Data * d = data.read();
 
         for (;;) {
             Data * d2 = d->copy(d->size());
             d2->pop_back();
-            if (set_data(d, d2)) return;
+            if (data.publish(d, d2)) return;
         }
 #else
         Data * d;
         do {
-            d = get_data();
+            d = data.read();
             d->pop_back();
             d->back().valid_to = 1;  // probably unnecessary...
             memory_barrier();
@@ -369,7 +327,7 @@ public:
 
     virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
     {
-        const Data * d = get_data();
+        const Data * d = data.read();
 
         for (;;) {
 
@@ -432,7 +390,7 @@ public:
                     throw Exception("sizes were wrong");
                 }
                 
-                if (set_data(d, data2)) return;
+                if (data.publish(d, data2)) return;
                 continue;
             }
             
@@ -505,7 +463,7 @@ public:
 
     void dump_itl(std::ostream & stream, int indent = 0) const
     {
-        const Data * d = get_data();
+        const Data * d = data.read();
 
         using namespace std;
         std::string s(indent, ' ');
