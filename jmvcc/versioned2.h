@@ -450,7 +450,7 @@ public:
         }
     }
     
-    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) throw ()
+    virtual Epoch rename_epoch(Epoch old_epoch, Epoch new_epoch) throw ()
     {
         throw Exception("versioned2: no renaming");
 #if 0

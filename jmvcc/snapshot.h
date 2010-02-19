@@ -90,7 +90,8 @@ struct Snapshot_Info {
 
     void remove_snapshot(Snapshot * snapshot);
 
-    void register_cleanup(Versioned_Object * obj, Epoch valid_from_to_cleanup);
+    void register_cleanup(Versioned_Object * obj,
+                          Epoch valid_from_to_cleanup);
 
     void dump(std::ostream & stream = std::cerr);
 
@@ -118,13 +119,24 @@ private:
     typedef ACE_Mutex Mutex;
     mutable Mutex lock;
 
-    typedef std::vector<std::pair<Versioned_Object *, Epoch> > Cleanups;
+    struct Cleanup_Entry {
+        Cleanup_Entry(Versioned_Object * object = 0,
+                      Epoch valid_from = 0)
+            : object(object), valid_from(valid_from)
+        {
+        }
+
+        Versioned_Object * object;
+        Epoch valid_from;
+    };
+
+    typedef std::vector<Cleanup_Entry> Cleanups;
 
     struct Entry {
         std::set<Snapshot *> snapshots;
         Cleanups cleanups;
 
-        void add_cleanup(const std::pair<Versioned_Object *, Epoch> & cleanup);
+        void add_cleanup(const Cleanup_Entry & cleanup);
         mutable Spinlock lock;
     };
 

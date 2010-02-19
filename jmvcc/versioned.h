@@ -284,22 +284,25 @@ public:
         throw Exception("attempt to clean up something that didn't exist");
     }
     
-    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) throw ()
+    virtual Epoch rename_epoch(Epoch old_valid_from,
+                               Epoch new_valid_from) throw ()
     {
         ACE_Guard<Mutex> guard(lock);
 
-        cerr << "rename_epoch: old_epoch = " << old_epoch << " new_epoch = "
-             << new_epoch << endl;
-        dump_unlocked();
-        
         if (history.empty())
-            throw Exception("renaming up with no values");
+            throw Exception("renaming with no values");
         
-        if (old_epoch < history[0].valid_to) {
+#if 0
+        if (old_valid_from < history[0].valid_to) {
             // The last one doesn't have a valid_from, so we assume that it's
             // ok and leave it.
             return;
         }
+#endif
+
+        // This is subtle.  Since we have valid_to values stored and not
+        // valid_from values, we need to find the particular one and change
+        // it.
 
         // TODO: optimize
         int i = 0;
@@ -308,29 +311,27 @@ public:
                  end = history.end();
              it != end;  ++it, ++i) {
             
-            if (it->valid_to == old_epoch) {
-                if (i != 0 && boost::prior(it)->valid_to >= new_epoch)
-                    throw Exception("new epoch not ordered with respect to "
+            if (it->valid_to == old_valid_from) {
+                if (i != 0 && boost::prior(it)->valid_to >= new_valid_from)
+                    throw Exception("new valid_from not ordered with respect to "
                                     "old");
                 if (i != history.size() - 1
-                    && boost::next(it)->valid_to <= new_epoch)
-                    throw Exception("new epoch not ordered with respect to "
+                    && boost::next(it)->valid_to <= new_valid_from)
+                    throw Exception("new valid_from not ordered with respect to "
                                     "old 2");
                 
-                it->valid_to = new_epoch;
+                it->valid_to = new_valid_from;
 
-                cerr << "after:" << endl;
-                dump_unlocked();
-
-
-                return;
+                ++it;
+                if (it == end) return 0;
+                else return it->valid_to;
             }
         }
 
         using namespace std;
         cerr << "---------------------" << endl;
-        cerr << "old_epoch = " << old_epoch << endl;
-        cerr << "new_epoch = " << new_epoch << endl;
+        cerr << "old_epoch = " << old_valid_from << endl;
+        cerr << "new_epoch = " << new_valid_from << endl;
         dump_unlocked();
         throw Exception("attempt to rename something that didn't exist");
     }

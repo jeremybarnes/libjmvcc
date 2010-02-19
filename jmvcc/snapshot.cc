@@ -198,7 +198,7 @@ register_snapshot(Snapshot * snapshot)
 }
 
 void Snapshot_Info::Entry::
-add_cleanup(const std::pair<Versioned_Object *, Epoch> & cleanup)
+add_cleanup(const Cleanup_Entry & cleanup)
 {
     ACE_Guard<Spinlock> guard(lock);
     cleanups.push_back(cleanup);
@@ -313,18 +313,18 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
     Entry & entry = it->second;
 
     // List of things to clean up once we release the guard
-    vector<pair<Versioned_Object *, Epoch> > to_clean_up;
+    vector<Cleanup_Entry> to_clean_up;
     
     for (unsigned i = 0;  i < entry.cleanups.size();  ++i) {
-        Versioned_Object * obj = entry.cleanups[i].first;
-        Epoch valid_from = entry.cleanups[i].second;
+        Versioned_Object * obj = entry.cleanups[i].object;
+        Epoch valid_from = entry.cleanups[i].valid_from;
         
         //cerr << "epoch = " << epoch << endl;
         
         if (prev_epoch >= valid_from && prev_snapshot) {
             // still needed by prev snapshot
             //prev_snapshot->cleanups.push_back(make_pair(obj, valid_from));
-            prev_snapshot->add_cleanup(make_pair(obj, valid_from));
+            prev_snapshot->add_cleanup(Cleanup_Entry(obj, valid_from));
         }
         else {
             // not needed anymore
@@ -346,11 +346,11 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
     // Now do the actual cleanups with no lock held, to avoid deadlock (we can't
     // take the object lock with the snapshot_info lock held).
     for (unsigned i = 0;  i < to_clean_up.size();  ++i) {
-        Versioned_Object * obj = to_clean_up[i].first;
-        Epoch epoch = to_clean_up[i].second;
+        Versioned_Object * obj = to_clean_up[i].object;
+        Epoch valid_from = to_clean_up[i].valid_from;
         
         try {
-            obj->cleanup(epoch, snapshot_epoch);
+            obj->cleanup(valid_from, snapshot_epoch);
         }
         catch (const std::exception & exc) {
             ostringstream obj_stream;
@@ -381,7 +381,7 @@ register_cleanup(Versioned_Object * obj, Epoch valid_from_to_cleanup)
             throw Exception("register_cleanup with no snapshots");
 
         it = boost::prior(entries.end());
-        it->second.add_cleanup(make_pair(obj, valid_from_to_cleanup));
+        it->second.add_cleanup(Cleanup_Entry(obj, valid_from_to_cleanup));
     }
 }
 
@@ -489,22 +489,23 @@ compress_epochs()
 
                  jend = entry.cleanups.end();
              jt != jend;  ++jt) {
-            Versioned_Object * obj = jt->first;
-            size_t valid_from = jt->second;
+            Versioned_Object * obj = jt->object;
+            size_t valid_from = jt->valid_from;
 
             cerr << "  object " << obj << " before renaming "
                  << old_epoch << " to " << new_epoch << ":" << endl;
             obj->dump(cerr, 4);
 
             // TODO: if this throws? (not allowed to)
-            obj->rename_epoch(valid_from, new_epoch);
+            Epoch next = obj->rename_epoch(valid_from, new_epoch);
 
             cerr << "  object " << obj << " after renaming "
-                 << old_epoch << " to " << new_epoch << ":" << endl;
+                 << old_epoch << " to " << new_epoch << " with next "
+                 << next << ":" << endl;
             obj->dump(cerr, 4);
 
             // Put it back in the cleanup list with the new epoch
-            jt->second = new_epoch;
+            jt->valid_from = new_epoch;
         }
 
         // Make sure writes are visible before we continue
@@ -569,8 +570,8 @@ dump_unlocked(std::ostream & stream)
                    << endl;
         stream << "    " << entry.cleanups.size() << " cleanups" << endl;
         for (unsigned j = 0;  j < entry.cleanups.size();  ++j)
-            stream << "      " << j << ": object " << entry.cleanups[j].first
-                 << " with version " << entry.cleanups[j].second << endl;
+            stream << "      " << j << ": object " << entry.cleanups[j].object
+                 << " valid_from " << entry.cleanups[j].valid_from << endl;
     }
 }
 
@@ -602,8 +603,8 @@ has_cleanup(Epoch snapshot_epoch, const Versioned_Object * object) const
              jt = it->second.cleanups.begin(),
              jend = it->second.cleanups.end();
          jt != jend;  ++jt)
-        if (jt->first == object)
-            return jt->second;
+        if (jt->object == object)
+            return jt->valid_from;
 
     return 0;
 }

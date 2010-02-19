@@ -36,10 +36,12 @@ struct Versioned_Object {
     virtual void rollback(Epoch new_epoch, void * data) throw () = 0;
 
     // Clean up an unused version
-    virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch) = 0;
+    virtual void cleanup(Epoch unused_valid_from, Epoch trigger_epoch) = 0;
     
-    // Rename an epoch to a different number
-    virtual void rename_epoch(Epoch old_epoch, Epoch new_epoch) throw () = 0;
+    // Rename an epoch to a different number.  Returns the valid_from value
+    // of the next epoch in the set.
+    virtual Epoch rename_epoch(Epoch old_valid_from, Epoch new_valid_from)
+        throw () = 0;
 
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const;
 
