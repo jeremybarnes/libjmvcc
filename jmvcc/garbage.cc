@@ -208,6 +208,19 @@ int num_cleanups_outstanding = 0;
 
 bool debug_mode = false;
 
+int num_added_local = 0;
+int num_added_newest = 0;
+int num_cleaned_immediately = 0;
+
+struct Stats {
+    ~Stats()
+    {
+        cerr << "num_added_local = " << num_added_local << endl;
+        cerr << "num_added_newest = " << num_added_newest << endl;
+        cerr << "num_cleaned_immediately = "
+             << num_cleaned_immediately << endl;
+    }
+} stats;
 
 struct Critical_Info {
     bool live;
@@ -249,7 +262,7 @@ struct Critical_Info {
         // Must be called with critical_lock held
         if (prev) {
             prev->next = next;
-            prev->transfer_cleanups(cleanups);
+            prev->take_cleanups_from(cleanups);
         }
 
         if (next) next->prev = prev;
@@ -271,7 +284,7 @@ struct Critical_Info {
         atomic_add(num_cleanups_outstanding, 1);
     }
 
-    void transfer_cleanups(Cleanups & other_cleanups)
+    void take_cleanups_from(Cleanups & other_cleanups)
     {
         if (cleanups.size() < other_cleanups.size())
             cleanups.swap(other_cleanups);
@@ -304,6 +317,10 @@ __thread Critical_Info * t_critical = 0;
 /// The structure that was allocated
 __thread Critical_Info * t_critical_alloc = 0;
 
+
+/// The quick queue for local cleanups; to be transferred to the newest one
+/// once the thread finishes
+__thread Cleanups * t_cleanups = 0;
 
 /// Thread-specific data: nesting level of the current thread.
 __thread uint32_t t_nesting = 0;
@@ -342,6 +359,12 @@ void leave_critical()
     // We can't call cleanups with the lock held
     {
         ACE_Guard<Critical_Lock> guard(critical_lock);
+
+        // Our local list of things to clean up gets transferred to the
+        // list of the newest one
+        if (t_cleanups)
+            newest_ci->take_cleanups_from(*t_cleanups);
+        
         t_critical->remove();
         t_critical = 0;
         --num_in_critical;
@@ -364,10 +387,45 @@ void new_critical()
 
 void schedule_cleanup(const Cleanup & cleanup)
 {
-    ACE_Guard<Critical_Lock> guard(critical_lock); // TO REMOVE
-    if (newest_ci)
-        newest_ci->add_cleanup(cleanup);
-    else cleanup();
+    /* NOTE: concurrency notes
+
+       This function is called without any lock whatsoever.  As a result, the
+       newest_ci field could be changing at the same time.
+
+       Note that:
+       1.  The Cleanup_Info structures, once live, never disappear, so the
+           newest_ci pointer will always point to a valid structure.  (NOTE:
+           this is not true in the case of a thread exiting, but it will be
+           possible to deal with that).
+       2.  If the newest_ci pointer changes, it will always represent a later
+           critical section, which could also take care of cleaning up.
+       3.  The main complication is when we end up pointing to a Cleanup_Info
+           structure that is concurrently either a) having new cleanups added
+           to it via the take_cleanups_from method, or b) having new cleanups
+           removed.
+    */
+
+    if (JML_UNLIKELY(!t_critical)) {
+        ACE_Guard<Critical_Lock> guard(critical_lock); // TO REMOVE
+
+        if (newest_ci) {
+            atomic_add(num_added_newest, 1);
+            newest_ci->add_cleanup(cleanup);
+        }
+        else {
+            cleanup();
+            atomic_add(num_cleaned_immediately, 1);
+        }
+
+        return;
+    }
+
+    if (JML_UNLIKELY(!t_cleanups))
+        t_cleanups = new Cleanups();
+
+    atomic_add(num_cleanups_outstanding, 1);
+    atomic_add(num_added_local, 1);
+    t_cleanups->push_back(cleanup);
 }
 
 void check_invariants()
