@@ -71,7 +71,10 @@ namespace JMVCC {
      publish_critical(new_value, cleanup_function).  The cleanup_function will
      be called on the old value once it can't possibly be valid anymore.
    * To schedule an arbitrary cleanup function to be run when nothing can
-     access the object anymore, call schedule_cleanup().
+     access the object anymore, call schedule_cleanup().  Note that this
+     function MAY be called outside a critical section, which is useful
+     for things like destructors.  If there are no critical sections in
+     process, then the cleanup will be run straight away.
    * To make an object that does all of this automatically, use the RCU<>
      template.
 
@@ -346,11 +349,10 @@ void new_critical()
 
 void schedule_cleanup(const Cleanup & cleanup)
 {
-    if (!t_critical)
-        throw Exception("can't schedule cleanup outside critical section");
-
     ACE_Guard<Critical_Lock> guard(critical_lock); // TO REMOVE
-    newest_ci->add_cleanup(cleanup);
+    if (newest_ci)
+        newest_ci->add_cleanup(cleanup);
+    else cleanup();
 }
 
 void check_invariants()

@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE( testx )
         run_object_test_x<Versioned2<int> >(2,  50000);
 }
 
-#if 0
+#if 1
 template<class Var>
 void object_test_thread(Var & var, int iter,
                         boost::barrier & barrier,
@@ -515,7 +515,7 @@ BOOST_AUTO_TEST_CASE( test1 )
 {
     //run_object_test(1, 10000);
     //run_object_test(10, 1000);
-    //run_object_test<Versioned2<int> >(1, 100000);
+    run_object_test<Versioned2<int> >(1, 100000);
     run_object_test<Versioned2<int> >(2,  50000);
     run_object_test<Versioned2<int> >(10, 10000);
 
@@ -630,7 +630,7 @@ void run_object_test2(int nthreads, int niter, int nvals)
 
     BOOST_CHECK_EQUAL(total, 0);
     for (unsigned i = 0;  i < nvals;  ++i) {
-        cerr << "current_epoch = " << get_current_epoch() << endl;
+        //cerr << "current_epoch = " << get_current_epoch() << endl;
         if (vals[i].history_size() != 0)
             vals[i].dump();
         BOOST_CHECK_EQUAL(vals[i].history_size(), 0);
@@ -645,7 +645,7 @@ BOOST_AUTO_TEST_CASE( test2 )
     //run_object_test2<Versioned<int> >(1, 1000, 1);
     //run_object_test2<Versioned2<int> >(1, 1000, 1);
     //run_object_test2(2, 20, 10);
-    //run_object_test2<Versioned<int> >(2,  5000, 2);
+    run_object_test2<Versioned<int> >(2,  5000, 2);
     run_object_test2<Versioned2<int> >(2,  5000, 2);
     run_object_test2<Versioned<int> >(10, 10000, 100);
     run_object_test2<Versioned2<int> >(10, 10000, 100);

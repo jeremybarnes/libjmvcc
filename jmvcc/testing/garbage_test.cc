@@ -74,6 +74,18 @@ BOOST_AUTO_TEST_CASE(test1)
     BOOST_CHECK_EQUAL(v, 1);
 }
 
+BOOST_AUTO_TEST_CASE(test_cleanup_no_critical_section)
+{
+    int v = 0;
+
+    // Since we want to be able to run destructors, etc, outside critical
+    // sections, we check our ability to do this here.  The cleanup should
+    // run straight away.
+    BOOST_CHECK_NO_THROW(schedule_cleanup(Set_Var(v, 1)));
+
+    BOOST_CHECK_EQUAL(v, 1);
+}
+
 size_t num_live = 0;
 size_t max_num_live = 0;
 

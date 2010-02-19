@@ -75,7 +75,7 @@ struct Versioned2 : public Versioned_Object {
     {
         const Data * d = get_data();
 
-        if (delay && true) {
+        if (delay && false) {
             timespec ts = { 0, 10000000 };
             nanosleep(&ts, 0);
         }
@@ -339,7 +339,7 @@ private:
                 abort();
             }
 
-            //free(data);  // DEBUG
+            free(data);  // DEBUG
         }
 
         Data * data;
