@@ -215,6 +215,8 @@ int num_cleaned_immediately = 0;
 struct Stats {
     ~Stats()
     {
+        if (!debug_mode) return;
+
         cerr << "num_added_local = " << num_added_local << endl;
         cerr << "num_added_newest = " << num_added_newest << endl;
         cerr << "num_cleaned_immediately = "
@@ -281,7 +283,7 @@ struct Critical_Info {
     void add_cleanup(Cleanup cleanup)
     {
         cleanups.push_back(cleanup);
-        atomic_add(num_cleanups_outstanding, 1);
+        if (debug_mode) atomic_add(num_cleanups_outstanding, 1);
     }
 
     void take_cleanups_from(Cleanups & other_cleanups)
@@ -303,7 +305,7 @@ struct Critical_Info {
         for (unsigned i = 0;  i != cleanups.size();  ++i)
             cleanups[i]();
 
-        atomic_add(num_cleanups_outstanding, -cleanups.size());
+        if (debug_mode) atomic_add(num_cleanups_outstanding, -cleanups.size());
         
         cleanups.clear();
     }
@@ -406,25 +408,31 @@ void schedule_cleanup(const Cleanup & cleanup)
     */
 
     if (JML_UNLIKELY(!t_critical)) {
+        // Slow path: not in a critical section
+        // We need to add the value to the newest_ci if it exists, or otherwise
+        // just clean it up straight away.
         ACE_Guard<Critical_Lock> guard(critical_lock); // TO REMOVE
 
         if (newest_ci) {
-            atomic_add(num_added_newest, 1);
+            if (debug_mode) atomic_add(num_added_newest, 1);
             newest_ci->add_cleanup(cleanup);
         }
         else {
             cleanup();
-            atomic_add(num_cleaned_immediately, 1);
+            if (debug_mode) atomic_add(num_cleaned_immediately, 1);
         }
 
         return;
     }
 
+    // No local cleanup list?  We can return
     if (JML_UNLIKELY(!t_cleanups))
         t_cleanups = new Cleanups();
 
-    atomic_add(num_cleanups_outstanding, 1);
-    atomic_add(num_added_local, 1);
+    if (debug_mode) {
+        atomic_add(num_cleanups_outstanding, 1);
+        atomic_add(num_added_local, 1);
+    }
     t_cleanups->push_back(cleanup);
 }
 
