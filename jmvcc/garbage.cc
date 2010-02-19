@@ -237,7 +237,8 @@ struct Critical_Info {
 
     ~Critical_Info()
     {
-        cleanup();
+        if (!cleanups.empty())
+            throw Exception("exited critical section with live cleanups");
     }
 
     void remove()
@@ -253,6 +254,8 @@ struct Critical_Info {
 
         if (next) next->prev = prev;
         else newest_ci = prev;
+
+        prev = next = 0;
 
         live = false;
     }
@@ -293,6 +296,10 @@ struct Critical_Info {
 __thread Critical_Info * t_critical = 0;
 
 
+/// The structure that was allocated
+__thread Critical_Info * t_critical_alloc = 0;
+
+
 /// Thread-specific data: nesting level of the current thread.
 __thread uint32_t t_nesting = 0;
 
@@ -304,7 +311,12 @@ void enter_critical()
         return;
     }
     
-    t_critical = new Critical_Info();
+    if (JML_UNLIKELY(!t_critical_alloc))
+        t_critical_alloc = new Critical_Info();
+    
+    t_critical = t_critical_alloc;
+    if (t_critical->live)
+        throw Exception("entered critical section with live t_critical");
 
     ACE_Guard<Critical_Lock> guard(critical_lock);
     t_critical->insert();
@@ -322,8 +334,6 @@ void leave_critical()
     --t_nesting;
     if (t_nesting > 0) return;
 
-    Critical_Info * old_t_critical = t_critical;
-
     // We can't call cleanups with the lock held
     {
         ACE_Guard<Critical_Lock> guard(critical_lock);
@@ -333,7 +343,7 @@ void leave_critical()
         check_invariants();
     }
 
-    delete old_t_critical;
+    t_critical_alloc->cleanup();
 
     if (debug_mode) {
         ACE_Guard<Critical_Lock> guard(critical_lock);
