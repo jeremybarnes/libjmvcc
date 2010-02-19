@@ -90,7 +90,7 @@ struct Snapshot_Info {
 
     void remove_snapshot(Snapshot * snapshot);
 
-    void register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup);
+    void register_cleanup(Versioned_Object * obj, Epoch valid_from_to_cleanup);
 
     void dump(std::ostream & stream = std::cerr);
 

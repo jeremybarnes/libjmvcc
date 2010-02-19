@@ -365,7 +365,7 @@ perform_cleanup(Entries::iterator it, ACE_Guard<Mutex> & guard)
 
 void
 Snapshot_Info::
-register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup)
+register_cleanup(Versioned_Object * obj, Epoch valid_from_to_cleanup)
 {
     // This is always called with the commit lock held, so:
     // 1.  The cleanups cannot happen at the same time;
@@ -381,7 +381,7 @@ register_cleanup(Versioned_Object * obj, Epoch epoch_to_cleanup)
             throw Exception("register_cleanup with no snapshots");
 
         it = boost::prior(entries.end());
-        it->second.add_cleanup(make_pair(obj, epoch_to_cleanup));
+        it->second.add_cleanup(make_pair(obj, valid_from_to_cleanup));
     }
 }
 
@@ -479,6 +479,8 @@ compress_epochs()
         }
         
         Entry & entry = it->second;
+
+        cerr << entry.cleanups.size() << " cleanups" << endl;
 
         /* The cleanup list points to all things that need to be in this
            epoch. */

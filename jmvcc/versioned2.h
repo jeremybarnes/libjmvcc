@@ -368,7 +368,7 @@ public:
 #endif
     }
 
-    virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
+    virtual void cleanup(Epoch unused_valid_from, Epoch trigger_epoch)
     {
         const Data * d = get_data();
 
@@ -376,14 +376,14 @@ public:
 
             if (d->size() < 2) {
                 using namespace std;
-                cerr << "cleaning up: unused_epoch = " << unused_epoch
+                cerr << "cleaning up: unused_valid_from = " << unused_valid_from
                      << " trigger_epoch = " << trigger_epoch << endl;
                 cerr << "current_epoch = " << get_current_epoch() << endl;
                 throw Exception("cleaning up with no values to clean up");
             }
             
             using namespace std;
-            //cerr << "cleaning up: unused_epoch = " << unused_epoch
+            //cerr << "cleaning up: unused_valid_from = " << unused_valid_from
             //     << " trigger_epoch = " << trigger_epoch << endl;
             
             //dump_unlocked();
@@ -404,9 +404,9 @@ public:
                 //     << found << " valid_from = " << valid_from << endl;
                 //cerr << "data2->size() = " << data2->size() << endl;
                 
-                if (valid_from == unused_epoch
+                if (valid_from == unused_valid_from
                     || (i == d->first
-                        && unused_epoch < d->front().valid_to)) {
+                        && unused_valid_from < d->front().valid_to)) {
                     //cerr << "  removing" << endl;
                     if (found)
                         throw Exception("two with the same valid_from value");
@@ -441,7 +441,7 @@ public:
             Guard guard2(lock);
             cerr << "----------- cleaning up didn't exist ---------" << endl;
             dump_unlocked();
-            cerr << "unused_epoch = " << unused_epoch << endl;
+            cerr << "unused_valid_from = " << unused_valid_from << endl;
             cerr << "trigger_epoch = " << trigger_epoch << endl;
             snapshot_info.dump();
             cerr << "----------- end cleaning up didn't exist ---------" << endl;

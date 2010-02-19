@@ -64,8 +64,32 @@ BOOST_AUTO_TEST_CASE( test0 )
     BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
 }
 
+struct In_Trans_Context : public In_Out_Critical {
+    Transaction * old_trans;
+
+    In_Trans_Context(Transaction * t)
+    {
+        old_trans = current_trans;
+        current_trans = t;
+    }
+
+    In_Trans_Context(const auto_ptr<Transaction> & t)
+    {
+        old_trans = current_trans;
+        current_trans = t.get();
+    }
+
+    ~In_Trans_Context()
+    {
+        current_trans = old_trans;
+    }
+    
+};
+
 void run_test(int test_num)
 {
+    cerr << "test_num = " << test_num << endl;
+
     BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
     
     current_epoch_ = 600;
@@ -74,7 +98,10 @@ void run_test(int test_num)
     Versioned<int> var(0);
 
     BOOST_CHECK_EQUAL(var.history_size(), 0);
-    BOOST_CHECK_EQUAL(var.read(), 0);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 0);
+    }
 
     auto_ptr<Transaction> t1(new Transaction());
     auto_ptr<Transaction> t2(new Transaction());
@@ -86,15 +113,13 @@ void run_test(int test_num)
     BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
 
     {
-        current_trans = t1.get();
-        
+        In_Trans_Context trans(t1);
+
         for (unsigned i = 0;  i < 20;  ++i) {
             int & v = var.mutate();
             v += 1;
             BOOST_CHECK_EQUAL(t1->commit(), true);
         }
-
-        current_trans = 0;
     }
 
     BOOST_CHECK_EQUAL(get_current_epoch(), 620);
@@ -102,11 +127,14 @@ void run_test(int test_num)
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
 
-    BOOST_CHECK_EQUAL(var.read(), 20);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 20);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 1);
 
     {
-        current_trans = t2.get();
+        In_Trans_Context trans(t2);
 
         BOOST_CHECK_EQUAL(var.read(), 0);
 
@@ -125,11 +153,12 @@ void run_test(int test_num)
         }
         
         BOOST_CHECK_EQUAL(var.read(), 40);
-        
-        current_trans = 0;
     }
 
-    BOOST_CHECK_EQUAL(var.read(), 40);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 40);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 2);
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
@@ -140,7 +169,7 @@ void run_test(int test_num)
     auto_ptr<Transaction> t3(new Transaction());
 
     {
-        current_trans = t3.get();
+        In_Trans_Context trans(t3);
 
         BOOST_CHECK_EQUAL(var.read(), 40);
 
@@ -151,17 +180,38 @@ void run_test(int test_num)
         }
 
         BOOST_CHECK_EQUAL(var.read(), 60);
-
-        current_trans = 0;
     }
     
-    BOOST_CHECK_EQUAL(var.read(), 60);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 60);
+    }
     BOOST_CHECK_EQUAL(var.history_size(), 3);
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 4);
 
     BOOST_CHECK_EQUAL(get_current_epoch(), 660);
     BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
+
+    {
+        In_Trans_Context trans(t1);
+        BOOST_CHECK_EQUAL(var.read(), 20);
+    }
+
+    {
+        In_Trans_Context trans(t2);
+        BOOST_CHECK_EQUAL(var.read(), 40);
+    }
+
+    {
+        In_Trans_Context trans(t3);
+        BOOST_CHECK_EQUAL(var.read(), 60);
+    }
+
+    {
+        In_Trans_Context trans(t0);
+        BOOST_CHECK_EQUAL(var.read(), 0);
+    }
 
     if (test_num > 2) {
         BOOST_CHECK_NO_THROW(snapshot_info.compress_epochs());
@@ -177,30 +227,24 @@ void run_test(int test_num)
         cerr << "------------ end var after renaming" << endl;
     }
 
-
-
     {
-        current_trans = t1.get();
+        In_Trans_Context trans(t1);
         BOOST_CHECK_EQUAL(var.read(), 20);
-        current_trans = 0;
     }
 
     {
-        current_trans = t2.get();
+        In_Trans_Context trans(t2);
         BOOST_CHECK_EQUAL(var.read(), 40);
-        current_trans = 0;
     }
 
     {
-        current_trans = t3.get();
+        In_Trans_Context trans(t3);
         BOOST_CHECK_EQUAL(var.read(), 60);
-        current_trans = 0;
     }
 
     {
-        current_trans = t0.get();
+        In_Trans_Context trans(t0);
         BOOST_CHECK_EQUAL(var.read(), 0);
-        current_trans = 0;
     }
 
     if (test_num == 1) {
@@ -209,26 +253,38 @@ void run_test(int test_num)
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 620);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
         BOOST_CHECK_EQUAL(var.history_size(), 2);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
         
         delete t1.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 640);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
         BOOST_CHECK_EQUAL(var.history_size(), 1);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t2.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 660);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
         BOOST_CHECK_EQUAL(var.history_size(), 0);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t3.release();
 
         BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         return;
     }
@@ -239,28 +295,40 @@ void run_test(int test_num)
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
         BOOST_CHECK_EQUAL(var.history_size(), 3);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t2.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
         BOOST_CHECK_EQUAL(var.history_size(), 2);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t1.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 600);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
         BOOST_CHECK_EQUAL(var.history_size(), 1);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t0.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 660);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
         BOOST_CHECK_EQUAL(var.history_size(), 0);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
 
@@ -273,27 +341,39 @@ void run_test(int test_num)
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 2);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
         BOOST_CHECK_EQUAL(var.history_size(), 2);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
         
         delete t1.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 3);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
         BOOST_CHECK_EQUAL(var.history_size(), 1);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t2.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 4);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
         BOOST_CHECK_EQUAL(var.history_size(), 0);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t3.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 5);
         BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         return;
     }
@@ -304,28 +384,40 @@ void run_test(int test_num)
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 3);
         BOOST_CHECK_EQUAL(var.history_size(), 3);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t2.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 2);
         BOOST_CHECK_EQUAL(var.history_size(), 2);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t1.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 1);
         BOOST_CHECK_EQUAL(var.history_size(), 1);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         delete t0.release();
 
         BOOST_CHECK_EQUAL(get_earliest_epoch(), 5);
         BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
         BOOST_CHECK_EQUAL(var.history_size(), 0);
-        BOOST_CHECK_EQUAL(var.read(), 60);
+        {
+            Local_Transaction trans;
+            BOOST_CHECK_EQUAL(var.read(), 60);
+        }
 
         BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 0);
 
@@ -341,7 +433,11 @@ void run_test(int test_num)
     // there is another (t2) with the same epoch
     delete t0.release();
 
-    BOOST_CHECK_EQUAL(var.read(), 2);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 2);
+    }
+
     BOOST_CHECK_EQUAL(var.history_size(), 2);
 
     {

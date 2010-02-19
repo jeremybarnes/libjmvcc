@@ -12,7 +12,11 @@
 #include "versioned_object.h"
 #include <ace/Synch.h>
 
+
 namespace JMVCC {
+
+
+using namespace std;
 
 
 /*****************************************************************************/
@@ -239,14 +243,14 @@ public:
         //valid_from = (history.empty() ? 0 : history.back().valid_to);
     }
 
-    virtual void cleanup(Epoch unused_epoch, Epoch trigger_epoch)
+    virtual void cleanup(Epoch unused_valid_from, Epoch trigger_epoch)
     {
         ACE_Guard<Mutex> guard(lock);
 
         if (history.empty())
             throw Exception("cleaning up with no values");
 
-        if (unused_epoch < history[0].valid_to) {
+        if (unused_valid_from < history[0].valid_to) {
             history.pop_front();
             return;
         }
@@ -259,7 +263,7 @@ public:
                  end = history.end();
              it != end;  valid_from = it->valid_to, last = it, ++it) {
 
-            if (valid_from == unused_epoch) {
+            if (valid_from == unused_valid_from) {
                 if (valid_from != 1)
                     last->valid_to = it->valid_to;
                 cleanup_entry(*it);
@@ -272,7 +276,7 @@ public:
         using namespace std;
         cerr << "----------- cleaning up didn't exist ---------" << endl;
         dump_unlocked();
-        cerr << "unused_epoch = " << unused_epoch << endl;
+        cerr << "unused_valid_from = " << unused_valid_from << endl;
         cerr << "trigger_epoch = " << trigger_epoch << endl;
         snapshot_info.dump();
         cerr << "----------- end cleaning up didn't exist ---------" << endl;
@@ -284,6 +288,10 @@ public:
     {
         ACE_Guard<Mutex> guard(lock);
 
+        cerr << "rename_epoch: old_epoch = " << old_epoch << " new_epoch = "
+             << new_epoch << endl;
+        dump_unlocked();
+        
         if (history.empty())
             throw Exception("renaming up with no values");
         
@@ -310,6 +318,11 @@ public:
                                     "old 2");
                 
                 it->valid_to = new_epoch;
+
+                cerr << "after:" << endl;
+                dump_unlocked();
+
+
                 return;
             }
         }
