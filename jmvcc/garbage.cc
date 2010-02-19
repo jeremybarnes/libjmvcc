@@ -273,10 +273,15 @@ struct Critical_Info {
 
     void transfer_cleanups(Cleanups & other_cleanups)
     {
-        // TODO: swap or something smarter depending upon which is longer
+        if (cleanups.size() < other_cleanups.size())
+            cleanups.swap(other_cleanups);
+
+        if (other_cleanups.empty()) return;
+
         cleanups.insert(cleanups.end(),
                         other_cleanups.begin(),
                         other_cleanups.end());
+
         other_cleanups.clear();
     }
 
