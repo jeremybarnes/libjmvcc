@@ -134,14 +134,17 @@ struct Garbage_Torture_Thread {
     Checked_Object ** vals;
     int & errors;
     int mode;
+    int & max_cleanups;
 
     Garbage_Torture_Thread(boost::barrier & barrier, int niter, int nthreads,
                            int thread, Checked_Object ** vals,
                            int & errors,
-                           int mode)
+                           int mode,
+                           int & max_cleanups)
         : barrier(barrier), niter(niter), nthreads(nthreads),
           thread(thread), vals(vals),
-          errors(errors), mode(mode)
+          errors(errors), mode(mode),
+          max_cleanups(max_cleanups)
     {
     }
 
@@ -155,7 +158,22 @@ struct Garbage_Torture_Thread {
         vector<int> old_values(nthreads);
 
         for (unsigned iter = 0;  iter < niter;  ++iter) {
+            int nc = get_num_in_critical();
+
+            if (nc >= nthreads) {
+                cerr << "num_in_critical = " << nc << endl;
+                ++local_errors;
+            }
+
             enter_critical();
+            
+            nc = get_num_in_critical();
+            if (nc == 0 || nc > nthreads) {
+                cerr << "num_in_critical = " << nc << endl;
+                ++local_errors;
+            }
+            
+            atomic_max(max_cleanups, get_num_cleanups_outstanding());
 
             for (unsigned i = 0;  i < nthreads;  ++i) {
                 try {
@@ -207,10 +225,13 @@ void run_garbage_test(int nthreads, int niter, int mode)
 
     int errors = 0;
 
+    int max_num_cleanups = 0;
+
     Timer timer;
     for (unsigned i = 0;  i < nthreads;  ++i)
         tg.create_thread(Garbage_Torture_Thread(barrier, niter, nthreads, i,
-                                                vals, errors, mode));
+                                                vals, errors, mode,
+                                                max_num_cleanups));
     
     tg.join_all();
 
@@ -218,6 +239,8 @@ void run_garbage_test(int nthreads, int niter, int mode)
 
     BOOST_CHECK_EQUAL(errors, 0);
     BOOST_CHECK_EQUAL(num_live, nthreads);
+    BOOST_CHECK_EQUAL(get_num_in_critical(), 0);
+    BOOST_CHECK_EQUAL(get_num_cleanups_outstanding(), 0);
 
     for (unsigned i = 0;  i < nthreads;  ++i) {
         BOOST_CHECK_EQUAL(vals[i]->get(), niter - 1);
@@ -227,6 +250,7 @@ void run_garbage_test(int nthreads, int niter, int mode)
     BOOST_CHECK_EQUAL(num_live, 0);
 
     cerr << "max_num_live = " << max_num_live << endl;
+    cerr << "max_num_cleanups = " << max_num_cleanups << endl;
     cerr << "elapsed: " << timer.elapsed() << endl;
 }
 
