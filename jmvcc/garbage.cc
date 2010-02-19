@@ -16,6 +16,7 @@
 #include <set>
 #include "jml/utils/string_functions.h"
 #include "jml/arch/backtrace.h"
+#include "jml/arch/atomic_ops.h"
 
 
 using namespace std;
@@ -200,14 +201,25 @@ Critical_Info * newest_ci = 0;
 typedef vector<boost::function<void ()> > Cleanups;
 
 int num_in_critical = 0;
+int num_cleanups_outstanding = 0;
 
-void check_invariants();
+bool debug_mode = false;
+
 
 struct Critical_Info {
     bool live;
 
     Critical_Info()
+        : live(false), prev(0), next(0)
     {
+    }
+
+    void insert()
+    {
+        if (live)
+            throw Exception("insert on live Critical_Info");
+        // Must be called with critical_lock held
+
         // This is the newest one.  Put it in the chain.
         prev = newest_ci;
         if (prev) {
@@ -222,8 +234,16 @@ struct Critical_Info {
 
     ~Critical_Info()
     {
-        if (!prev) cleanup();
-        else {
+        cleanup();
+    }
+
+    void remove()
+    {
+        if (!live)
+            throw Exception("remove on non-live Critical_Info");
+
+        // Must be called with critical_lock held
+        if (prev) {
             prev->next = next;
             prev->transfer_cleanups(cleanups);
         }
@@ -238,30 +258,29 @@ struct Critical_Info {
     Critical_Info * next;
     
     Cleanups cleanups;
-    //typedef ACE_Mutex Lock;
-    //Lock lock;
 
     void add_cleanup(Cleanup cleanup)
     {
-        //ACE_Guard<Lock> guard;
         cleanups.push_back(cleanup);
+        atomic_add(num_cleanups_outstanding, 1);
     }
 
     void transfer_cleanups(Cleanups & other_cleanups)
     {
         // TODO: swap or something smarter depending upon which is longer
-        //ACE_Guard<Lock> guard;
         cleanups.insert(cleanups.end(),
                         other_cleanups.begin(),
                         other_cleanups.end());
+        other_cleanups.clear();
     }
 
     void cleanup()
     {
-        //ACE_Guard<Lock> guard(lock);
         for (unsigned i = 0;  i != cleanups.size();  ++i)
             cleanups[i]();
 
+        atomic_add(num_cleanups_outstanding, -cleanups.size());
+        
         cleanups.clear();
     }
 };
@@ -282,8 +301,10 @@ void enter_critical()
         return;
     }
     
-    ACE_Guard<Critical_Lock> guard(critical_lock);
     t_critical = new Critical_Info();
+
+    ACE_Guard<Critical_Lock> guard(critical_lock);
+    t_critical->insert();
     ++t_nesting;
     ++num_in_critical;
     check_invariants();
@@ -298,14 +319,23 @@ void leave_critical()
     --t_nesting;
     if (t_nesting > 0) return;
 
-    /* If we have no parents, that means that we're the thread that everyone
-       is waiting for, and we can clean up.  Otherwise, we need to add
-       ourself to the list of things for our parent to clean up. */
-    ACE_Guard<Critical_Lock> guard(critical_lock);
-    delete t_critical;
-    t_critical = 0;
-    --num_in_critical;
-    check_invariants();
+    Critical_Info * old_t_critical = t_critical;
+
+    // We can't call cleanups with the lock held
+    {
+        ACE_Guard<Critical_Lock> guard(critical_lock);
+        t_critical->remove();
+        t_critical = 0;
+        --num_in_critical;
+        check_invariants();
+    }
+
+    delete old_t_critical;
+
+    {
+        ACE_Guard<Critical_Lock> guard(critical_lock);
+        check_invariants();
+    }
 }
 
 void new_critical()
@@ -347,6 +377,21 @@ void check_invariants()
                 throw Exception("one in critical but newest_ci->prev != 0");
         }
     }
+}
+
+int get_num_in_critical()
+{
+    return num_in_critical;
+}
+
+int get_num_cleanups_outstanding()
+{
+    return num_cleanups_outstanding;
+}
+
+void set_debug_mode(bool debug_mode_on)
+{
+    debug_mode = debug_mode_on;
 }
 
 } // namespace JMVCC

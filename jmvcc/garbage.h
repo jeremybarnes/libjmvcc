@@ -51,6 +51,13 @@ typedef boost::function<void ()> Cleanup;
 /// Schedule a cleanup.  Has to be called when in a critical section.
 void schedule_cleanup(const Cleanup & cleanup);
 
+
+// Debug only
+void set_debug_mode(bool debug_mode_on);
+int get_num_in_critical();
+int get_num_cleanups_outstanding();
+void check_invariants();
+
 } // namespace JMVCC
 
 #endif /* __jmvcc__garbage_h__ */

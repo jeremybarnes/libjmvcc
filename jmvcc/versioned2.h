@@ -303,9 +303,9 @@ private:
                          << current_trans->epoch() << endl;
                 cerr << "magic = " << magic << endl;
                 cerr << endl << " garbage" << endl;
-                dump_garbage_status();
+                //dump_garbage_status();
                 cerr << endl << " garbage validation" << endl;
-                validate_garbage_status(true);
+                //validate_garbage_status(true);
                 throw Exception("wrong magic");
             }
         }

@@ -164,17 +164,17 @@ struct Garbage_Torture_Thread {
             vals[thread] = new Checked_Object(iter);
 
             if (mode == 1 && thread > 0)
-                microsleep(0.001);
+                microsleep(0.0001);
 
             schedule_cleanup(Delete_Object<Checked_Object>(old));
 
             if (mode == 2 && thread > 0)
-                microsleep(0.001);
+                microsleep(0.0001);
 
             leave_critical();
 
             if (mode == 3 && thread > 0)
-                microsleep(0.001);
+                microsleep(0.0001);
             
         }
 
@@ -222,10 +222,10 @@ void run_garbage_test_mode(int mode)
 {
     cerr << endl << endl << "mode = " << mode << endl;
     run_garbage_test(1, 10, mode);
-    run_garbage_test(1, 10000, mode);
-    run_garbage_test(2,  50000, mode);
-    run_garbage_test(10, 10000, mode);
-    run_garbage_test(100, 1000, mode);
+    run_garbage_test(1, 1000, mode);
+    run_garbage_test(2,  5000, mode);
+    run_garbage_test(10, 1000, mode);
+    run_garbage_test(100, 100, mode);
 }
 
 BOOST_AUTO_TEST_CASE(garbage_torture)
