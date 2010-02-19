@@ -205,7 +205,7 @@ void object_test_thread_x(Var & var, int iter,
             
             {
                 Local_Transaction trans;
-                if (var.read(thread_id != 0) % 2 != 0) {
+                if (var.read() % 2 != 0) {
                     ++errors;
                     cerr << "val should be even after trans: " << var.read()
                          << endl;
@@ -283,7 +283,7 @@ void run_object_test_x(int nthreads, int niter)
 
 BOOST_AUTO_TEST_CASE( testx )
 {
-    for (unsigned i = 0;  i < 10;  ++i)
+    for (unsigned i = 0;  i < 1;  ++i)
         run_object_test_x<Versioned2<int> >(2,  50000);
 }
 

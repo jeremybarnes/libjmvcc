@@ -71,15 +71,8 @@ struct Versioned2 : public Versioned_Object {
         mutate() = val;
     }
     
-    const T read(bool delay = false) const
+    const T read() const
     {
-        const Data * d = get_data();
-
-        if (delay && false) {
-            timespec ts = { 0, 10000000 };
-            nanosleep(&ts, 0);
-        }
-
         if (!current_trans) {
             throw Exception("reading outside a transaction");
             //T result = d->value_at_epoch(get_current_epoch());
@@ -89,6 +82,8 @@ struct Versioned2 : public Versioned_Object {
         
         if (val) return *val;
         
+        const Data * d = get_data();
+
         T result = d->value_at_epoch(current_trans->epoch());
         return result;
     }

@@ -1,7 +1,8 @@
-/* object_test.cc Jeremy Barnes, 21 September 2009 Copyright (c) 2009
-   Jeremy Barnes.  All rights reserved.
+/* epoch_compression_test.cc
+   Jeremy Barnes, 21 September 2009
+   Copyright (c) 2009 Jeremy Barnes.  All rights reserved.
 
-   Test for the set functionality.
+   Test for the epoch compression functionality.
 */
 
 #define BOOST_TEST_MAIN
