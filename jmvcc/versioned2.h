@@ -71,9 +71,14 @@ struct Versioned2 : public Versioned_Object {
         mutate() = val;
     }
     
-    const T read() const
+    const T read(bool delay = false) const
     {
         const Data * d = get_data();
+
+        if (delay && true) {
+            timespec ts = { 0, 10000000 };
+            nanosleep(&ts, 0);
+        }
 
         if (!current_trans) {
             throw Exception("reading outside a transaction");
@@ -292,7 +297,15 @@ private:
                 cerr << "deleted_at     = " << deleted_at << endl;
                 cerr << "destroyed_at   = " << destroyed_at << endl;
                 cerr << "destroyed_for  = " << destroyed_for << endl;
+                cerr << "my trans = " << current_trans << endl;
+                if (current_trans != 0)
+                    cerr << "current_trans epoch = "
+                         << current_trans->epoch() << endl;
                 cerr << "magic = " << magic << endl;
+                cerr << endl << " garbage" << endl;
+                dump_garbage_status();
+                cerr << endl << " garbage validation" << endl;
+                validate_garbage_status(true);
                 throw Exception("wrong magic");
             }
         }

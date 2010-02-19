@@ -205,7 +205,7 @@ void object_test_thread_x(Var & var, int iter,
             
             {
                 Local_Transaction trans;
-                if (var.read() % 2 != 0) {
+                if (var.read(thread_id != 0) % 2 != 0) {
                     ++errors;
                     cerr << "val should be even after trans: " << var.read()
                          << endl;

@@ -46,16 +46,10 @@ struct Delete_Object {
     }
 };
 
-
+typedef boost::function<void ()> Cleanup;
 
 /// Schedule a cleanup.  Has to be called when in a critical section.
-void schedule_cleanup(const boost::function<void ()> & cleanup);
-
-/// For testing: dump the status of the garbage collector to cerr
-void dump_garbage_status();
-
-/// Testing again: validate the status of the garbage collector
-void validate_garbage_status(bool verbose = false);
+void schedule_cleanup(const Cleanup & cleanup);
 
 } // namespace JMVCC
 

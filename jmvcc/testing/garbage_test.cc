@@ -56,28 +56,20 @@ BOOST_AUTO_TEST_CASE(test1)
     int v = 0;
 
     cerr << "before critical" << endl;
-    validate_garbage_status();
-    dump_garbage_status();
 
     enter_critical();
 
     cerr << "in critical" << endl;
-    validate_garbage_status();
-    dump_garbage_status();
 
     schedule_cleanup(Set_Var(v, 1));
 
     cerr << "after cleanup" << endl;
-    validate_garbage_status();
-    dump_garbage_status();
 
     BOOST_CHECK_EQUAL(v, 0);
 
     leave_critical();
 
     cerr << "out of critical" << endl;
-    validate_garbage_status();
-    dump_garbage_status();
 
     BOOST_CHECK_EQUAL(v, 1);
 }
@@ -115,6 +107,12 @@ struct Checked_Object {
     int magic;
 };
 
+void microsleep(double seconds)
+{
+    timespec ts = { trunc(seconds), (seconds - trunc(seconds)) * 1000000 };
+    nanosleep(&ts, 0);
+}
+
 struct Garbage_Torture_Thread {
 
     boost::barrier & barrier;
@@ -123,13 +121,15 @@ struct Garbage_Torture_Thread {
     int thread;
     Checked_Object ** vals;
     int & errors;
+    int mode;
 
     Garbage_Torture_Thread(boost::barrier & barrier, int niter, int nthreads,
                            int thread, Checked_Object ** vals,
-                           int & errors)
+                           int & errors,
+                           int mode)
         : barrier(barrier), niter(niter), nthreads(nthreads),
           thread(thread), vals(vals),
-          errors(errors)
+          errors(errors), mode(mode)
     {
     }
 
@@ -163,16 +163,26 @@ struct Garbage_Torture_Thread {
             Checked_Object * old = vals[thread];
             vals[thread] = new Checked_Object(iter);
 
+            if (mode == 1 && thread > 0)
+                microsleep(0.001);
+
             schedule_cleanup(Delete_Object<Checked_Object>(old));
 
+            if (mode == 2 && thread > 0)
+                microsleep(0.001);
+
             leave_critical();
+
+            if (mode == 3 && thread > 0)
+                microsleep(0.001);
+            
         }
 
         atomic_add(errors, local_errors);
     }
 };
 
-void run_garbage_test(int nthreads, int niter)
+void run_garbage_test(int nthreads, int niter, int mode)
 {
     cerr << endl << endl;
     cerr << "testing garbage with " << nthreads << " threads" << endl;
@@ -188,13 +198,11 @@ void run_garbage_test(int nthreads, int niter)
     Timer timer;
     for (unsigned i = 0;  i < nthreads;  ++i)
         tg.create_thread(Garbage_Torture_Thread(barrier, niter, nthreads, i,
-                                                vals, errors));
+                                                vals, errors, mode));
     
     tg.join_all();
 
     cerr << "garbage collector status at end" << endl;
-    validate_garbage_status();
-    dump_garbage_status();
 
     BOOST_CHECK_EQUAL(errors, 0);
     BOOST_CHECK_EQUAL(num_live, nthreads);
@@ -210,12 +218,20 @@ void run_garbage_test(int nthreads, int niter)
     cerr << "elapsed: " << timer.elapsed() << endl;
 }
 
+void run_garbage_test_mode(int mode)
+{
+    cerr << endl << endl << "mode = " << mode << endl;
+    run_garbage_test(1, 10, mode);
+    run_garbage_test(1, 10000, mode);
+    run_garbage_test(2,  50000, mode);
+    run_garbage_test(10, 10000, mode);
+    run_garbage_test(100, 1000, mode);
+}
+
 BOOST_AUTO_TEST_CASE(garbage_torture)
 {
-    run_garbage_test(1, 10);
-    run_garbage_test(1, 10000);
-    run_garbage_test(2,  5000);
-    run_garbage_test(2,  5000000);
-    run_garbage_test(10, 1000);
-    run_garbage_test(100, 100);
+    run_garbage_test_mode(0);
+    run_garbage_test_mode(1);
+    run_garbage_test_mode(2);
+    run_garbage_test_mode(3);
 }
