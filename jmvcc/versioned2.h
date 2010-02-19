@@ -170,18 +170,6 @@ private:
             return history[first];
         }
 
-        void pop_front()
-        {
-            /* Need to:
-               1.  Increment first
-               2.  Set up the destructor for that element to be run for
-                   garbage collection
-            */
-            if (size() < 2)
-                throw Exception("attempt to pop last valid value off");
-            first += 1;
-        }
-
         void pop_back()
         {
             if (size() < 2)
@@ -401,14 +389,6 @@ public:
             //     << " trigger_epoch = " << trigger_epoch << endl;
             
             //dump_unlocked();
-            
-#if 0
-            if (unused_epoch < d->front().valid_to) {
-                // Can be done atomically
-                d->pop_front();
-                return;
-            }
-#endif
             
             //cerr << "not in first one" << endl;
             

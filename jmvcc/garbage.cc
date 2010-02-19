@@ -335,7 +335,7 @@ void leave_critical()
 
     delete old_t_critical;
 
-    {
+    if (debug_mode) {
         ACE_Guard<Critical_Lock> guard(critical_lock);
         check_invariants();
     }
@@ -357,6 +357,8 @@ void schedule_cleanup(const Cleanup & cleanup)
 
 void check_invariants()
 {
+    if (!debug_mode) return;
+
     if (num_in_critical == 0) {
         if (t_critical)
             throw Exception("num_in_critical == 0 but t_critical != 0");
