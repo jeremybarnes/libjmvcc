@@ -459,6 +459,8 @@ compress_epochs()
 
     dump_unlocked();
 
+    hash_map<Epoch, vector<Versioned_Object *> > extra_versions;
+
     int i = 1; // starting epoch number
     for (Entries::iterator it = entries.begin(), end = entries.end();
          it != end;  /* no inc it */ ++i) {
@@ -489,6 +491,7 @@ compress_epochs()
 
                  jend = entry.cleanups.end();
              jt != jend;  ++jt) {
+
             Versioned_Object * obj = jt->object;
             size_t valid_from = jt->valid_from;
 
@@ -497,7 +500,17 @@ compress_epochs()
             obj->dump(cerr, 4);
 
             // TODO: if this throws? (not allowed to)
+            // The next gives the valid_from of the final version, which is
+            // not in the cleanup list as it doesn't need to be cleaned up
+            // until there is another version (it is valid for an unknown time
+            // into the future).  If the result is zero, then we didn't just
+            // deal with the penultimate version, and so we'll get it later.
+            // Even though these aren't in the cleanup list, they still need
+            // to be dealt with.
             Epoch next = obj->rename_epoch(valid_from, new_epoch);
+
+            if (next != 0)
+                extra_versions[next].push_back(obj);
 
             cerr << "  object " << obj << " after renaming "
                  << old_epoch << " to " << new_epoch << " with next "
@@ -506,6 +519,32 @@ compress_epochs()
 
             // Put it back in the cleanup list with the new epoch
             jt->valid_from = new_epoch;
+        }
+
+        // Now for those final versions that aren't in the cleanup list
+
+        if (extra_versions.count(old_epoch)) {
+            const vector<Versioned_Object *> & objects
+                = extra_versions[old_epoch];
+
+            for (vector<Versioned_Object *>::const_iterator
+                     jt = objects.begin(),
+                     jend = objects.end();
+                 jt != jend;  ++jt) {
+
+                Versioned_Object * obj = *jt;
+                size_t valid_from = old_epoch;
+
+                cerr << "  final object " << obj << " before renaming "
+                     << old_epoch << " to " << new_epoch << ":" << endl;
+                obj->dump(cerr, 4);
+
+                obj->rename_epoch(valid_from, new_epoch);
+
+                cerr << "  object " << obj << " after renaming "
+                     << old_epoch << " to " << new_epoch << endl;
+                obj->dump(cerr, 4);
+            }
         }
 
         // Make sure writes are visible before we continue

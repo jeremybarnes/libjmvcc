@@ -292,13 +292,13 @@ public:
         if (history.empty())
             throw Exception("renaming with no values");
         
-#if 0
         if (old_valid_from < history[0].valid_to) {
             // The last one doesn't have a valid_from, so we assume that it's
             // ok and leave it.
-            return;
+            if (history.size() == 1)
+                return history[0].valid_to;
+            else return 0;
         }
-#endif
 
         // This is subtle.  Since we have valid_to values stored and not
         // valid_from values, we need to find the particular one and change
@@ -322,9 +322,11 @@ public:
                 
                 it->valid_to = new_valid_from;
 
-                ++it;
-                if (it == end) return 0;
-                else return it->valid_to;
+                if (i == history.size() - 2) {
+                    ++it;
+                    return it->valid_to;
+                }
+                return 0;
             }
         }
 
