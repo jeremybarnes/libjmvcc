@@ -115,28 +115,13 @@ private:
     // Internal data object allocated
     struct Data {
         Data(size_t capacity)
-            : capacity(capacity), first(0), last(0), magic(18273)
+            : capacity(capacity), first(0), last(0)
         {
-            created_at = get_current_epoch();
-            created_for = (current_trans ? current_trans->epoch() : -1);
-            zombied_at = 0;
-            zombied_for = 0;
-            destroyed_at = 0;
-            destroyed_for = 0;
-            deleted_at = 0;
         }
 
         Data(size_t capacity, const Data & old_data)
-            : capacity(capacity), first(0), last(0), magic(18273)
+            : capacity(capacity), first(0), last(0)
         {
-            created_at = get_current_epoch();
-            created_for = (current_trans ? current_trans->epoch() : 0);
-            zombied_at = 0;
-            zombied_for = 0;
-            destroyed_at = 0;
-            destroyed_for = 0;
-            deleted_at = 0;
-
             for (unsigned i = 0;  i < old_data.size();  ++i)
                 push_back(old_data.element(i));
         }
@@ -144,23 +129,13 @@ private:
         uint32_t capacity;   // Number allocated
         uint32_t first;      // Index of first valid entry
         uint32_t last;       // Index of last valid entry
-        uint32_t magic;
-        Epoch created_at;
-        Epoch created_for;
-        mutable Epoch zombied_at;
-        mutable Epoch zombied_for;
-        Epoch destroyed_at;
-        Epoch destroyed_for;
-        Epoch deleted_at;
         Entry history[1];  // real ones are allocated after
 
-        uint32_t size() const { cm();  return last - first; }
+        uint32_t size() const { return last - first; }
 
         ~Data()
         {
-            cm();
             size_t sz = size();
-            magic = 0;
             for (unsigned i = 0;  i < sz;  ++i)
                 history[i].value.~T();
         }
@@ -168,7 +143,6 @@ private:
         /// Return the value for the given epoch
         const T & value_at_epoch(Epoch epoch) const
         {
-            cm();
             for (int i = last - 1;  i > first;  --i) {
                 Epoch valid_from = history[i - 1].valid_to;
                 if (epoch >= valid_from)
@@ -180,7 +154,6 @@ private:
         
         Data * copy(size_t new_capacity) const
         {
-            cm();
             if (new_capacity < size())
                 throw Exception("new capacity is wrong");
 
@@ -189,19 +162,16 @@ private:
 
         Entry & front()
         {
-            cm();
             return history[first];
         }
 
         const Entry & front() const
         {
-            cm();
             return history[first];
         }
 
         void pop_front()
         {
-            cm();
             /* Need to:
                1.  Increment first
                2.  Set up the destructor for that element to be run for
@@ -214,7 +184,6 @@ private:
 
         void pop_back()
         {
-            cm();
             if (size() < 2)
                 throw Exception("popping back last element");
             --last;
@@ -223,7 +192,6 @@ private:
 
         void push_back(const Entry & entry)
         {
-            cm();
             if (last == capacity) {
                 using namespace std;
                 cerr << "last = " << last << endl;
@@ -240,19 +208,16 @@ private:
         
         const Entry & back() const
         {
-            cm();
             return history[last - 1];
         }
 
         Entry & back()
         {
-            cm();
             return history[last - 1];
         }
 
         Entry & element(int index)
         {
-            cm();
             if (index < 0 || index >= size())
                 throw Exception("invalid element");
             return history[first + index];
@@ -260,7 +225,6 @@ private:
 
         const Entry & element(int index) const
         {
-            cm();
             if (index < 0 || index >= size())
                 throw Exception("invalid element");
             return history[first + index];
@@ -268,7 +232,6 @@ private:
 
         size_t checksum() const
         {
-            cm();
             const unsigned * vals = reinterpret_cast<const unsigned *>(this);
             const unsigned * vals2 
                 = reinterpret_cast<const unsigned *>(&history[capacity]);
@@ -278,31 +241,6 @@ private:
                 total = total * 5 + (*vals);
 
             return total;
-        }
-
-        void cm() const
-        {
-            if (magic != 18273) {
-                using namespace std;
-                cerr << "current_epoch = " << get_current_epoch() << endl;
-                cerr << "earliest_epoch = " << get_earliest_epoch() << endl;
-                cerr << "created_at     = " << created_at << endl;
-                cerr << "created_for    = " << created_for << endl;
-                cerr << "zombied_at     = " << zombied_at << endl;
-                cerr << "deleted_at     = " << deleted_at << endl;
-                cerr << "destroyed_at   = " << destroyed_at << endl;
-                cerr << "destroyed_for  = " << destroyed_for << endl;
-                cerr << "my trans = " << current_trans << endl;
-                if (current_trans != 0)
-                    cerr << "current_trans epoch = "
-                         << current_trans->epoch() << endl;
-                cerr << "magic = " << magic << endl;
-                cerr << endl << " garbage" << endl;
-                //dump_garbage_status();
-                cerr << endl << " garbage validation" << endl;
-                //validate_garbage_status(true);
-                throw Exception("wrong magic");
-            }
         }
     };
 
@@ -323,18 +261,7 @@ private:
         void operator () ()
         {
             data->~Data();
-            data->deleted_at = epoch;
-            data->destroyed_at = get_current_epoch();
-            data->destroyed_for = (current_trans ? current_trans->epoch() : -1);
-
-            if (!current_trans && false) {
-                backtrace();
-                using namespace std;
-                cerr << "deleting data out of a transaction" << endl;
-                abort();
-            }
-
-            free(data);  // DEBUG
+            free(data);
         }
 
         Data * data;
@@ -373,7 +300,6 @@ private:
         // TODO: exception safety...
         void * d = malloc(sizeof(Data) + capacity * sizeof(Entry));
         Data * d2 = new (d) Data(capacity, old);
-        old.cm();
         return d2;
     }
 
@@ -390,11 +316,7 @@ private:
                                new_data);
 
         if (!result) delete_data_now(new_data);
-        else {
-            old_data->zombied_at = get_current_epoch();
-            old_data->zombied_for = (current_trans ? current_trans->epoch() : 0);
-            delete_data(const_cast<Data *>(old_data));
-        }
+        else delete_data(const_cast<Data *>(old_data));
 
         return result;
     }

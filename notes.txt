@@ -1,0 +1,78 @@
+Tests passing, no improvements:
+
+========= test 2: multiple variables
+
+testing 2 with 2 threads and 5000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [0.13s cpu, 220.8573 mticks, 0.08s wall]
+
+testing 2 with 2 threads and 5000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [0.11s cpu, 231.9840 mticks, 0.09s wall]
+
+testing 2 with 10 threads and 10000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [3.68s cpu, 3514.0414 mticks, 1.31s wall]
+
+testing 2 with 10 threads and 10000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [2.39s cpu, 3525.7567 mticks, 1.32s wall]
+
+testing 2 with 100 threads and 1000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [4.31s cpu, 3648.8603 mticks, 1.37s wall]
+
+testing 2 with 100 threads and 1000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [2.09s cpu, 3113.3734 mticks, 1.16s wall]
+
+testing 2 with 1000 threads and 100 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [7.20s cpu, 5495.5492 mticks, 2.06s wall]
+
+testing 2 with 1000 threads and 100 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [5.48s cpu, 6759.6202 mticks, 2.53s wall]
+
+testing 2 with 1 threads and 1000000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [1.89s cpu, 5066.0377 mticks, 1.90s wall]
+elapsed for 1000000 iterations: 1.89
+for 2^32 iterations: 8117.49s
+
+testing 2 with 1 threads and 1000000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [2.23s cpu, 5968.5588 mticks, 2.23s wall]
+elapsed for 1000000 iterations: 2.23
+for 2^32 iterations: 9577.78s
+
+
+
+
+Versioned2 cleanup number 1:
+
+========= test 2: multiple variables
+
+testing 2 with 2 threads and 5000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [0.08s cpu, 184.3953 mticks, 0.07s wall]
+
+testing 2 with 2 threads and 5000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [0.14s cpu, 245.4371 mticks, 0.09s wall]
+
+testing 2 with 10 threads and 10000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [3.64s cpu, 3619.4388 mticks, 1.35s wall]
+
+testing 2 with 10 threads and 10000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [2.00s cpu, 3154.0105 mticks, 1.18s wall]
+
+testing 2 with 100 threads and 1000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [4.11s cpu, 3656.8576 mticks, 1.37s wall]
+
+testing 2 with 100 threads and 1000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [2.11s cpu, 2825.2701 mticks, 1.06s wall]
+
+testing 2 with 1000 threads and 100 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [7.37s cpu, 5525.0042 mticks, 2.07s wall]
+
+testing 2 with 1000 threads and 100 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [6.22s cpu, 6165.9307 mticks, 2.31s wall]
+
+testing 2 with 1 threads and 1000000 iter class JMVCC::Versioned<int>
+elapsed: elapsed: [2.04s cpu, 5470.1197 mticks, 2.05s wall]
+elapsed for 1000000 iterations: 2.04
+for 2^32 iterations: 8761.73s
+
+testing 2 with 1 threads and 1000000 iter class JMVCC::Versioned2<int>
+elapsed: elapsed: [2.04s cpu, 5437.9589 mticks, 2.03s wall]
+elapsed for 1000000 iterations: 2.04
+for 2^32 iterations: 8761.73s
