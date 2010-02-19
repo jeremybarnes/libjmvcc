@@ -101,13 +101,11 @@ private:
     // latest epoch.
 
     struct Entry {
-        explicit Entry(Epoch valid_to = 1, const T & value = T(),
-                       Epoch valid_from = 1)
-            : valid_from(valid_from), valid_to(valid_to), value(value)
+        explicit Entry(Epoch valid_to = 1, const T & value = T())
+            : valid_to(valid_to), value(value)
         {
         }
 
-        Epoch valid_from;
         Epoch valid_to;
         T value;
     };
@@ -279,7 +277,7 @@ private:
         // TODO: exception safety...
         void * d = malloc(sizeof(Data) + capacity * sizeof(Entry));
         Data * d2 = new (d) Data(capacity);
-        d2->push_back(Entry(1,  val, get_current_epoch()));
+        d2->push_back(Entry(1,  val));
         return d2;
     }
 
@@ -330,8 +328,7 @@ public:
             Data * new_data = d->copy(d->size() + 1);
             new_data->back().valid_to = new_epoch;
             new_data->push_back(Entry(1 /* valid_to */,
-                                      *reinterpret_cast<T *>(new_value),
-                                      new_epoch));
+                                      *reinterpret_cast<T *>(new_value)));
             
             if (set_data(d, new_data)) return true;
         }
@@ -517,8 +514,8 @@ public:
                << " values" << endl;
         for (unsigned i = 0;  i < d->size();  ++i) {
             const Entry & entry = d->element(i);
-            stream << s << "  " << i << ": valid from "
-                   << entry.valid_from << " valid_to " << entry.valid_to;
+            stream << s << "  " << i << ": valid to "
+                   << entry.valid_to;
             stream << " addr " << &entry.value;
             stream << " value " << entry.value;
             stream << endl;
