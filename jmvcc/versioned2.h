@@ -450,47 +450,53 @@ public:
         }
     }
     
-    virtual Epoch rename_epoch(Epoch old_epoch, Epoch new_epoch) throw ()
+    virtual Epoch rename_epoch(Epoch old_valid_from, Epoch new_valid_from)
+        throw ()
     {
-        throw Exception("versioned2: no renaming");
-#if 0
-        if (history.empty())
-            throw Exception("renaming up with no values");
-        
-        if (old_epoch < history[0].valid_to) {
-            // The last one doesn't have a valid_from, so we assume that it's
-            // ok and leave it.
-            return;
-        }
+        const Data * d = get_data();
 
-        // TODO: optimize
-        int i = 0;
-        for (typename History::iterator
-                 it = history.begin(),
-                 end = history.end();
-             it != end;  ++it, ++i) {
+        for (;;) {
+
+            int s = d->size();
+
+            if (d->first != 0)
+                throw Exception("can't work with first != 0");
+
+            if (s == 0)
+                throw Exception("renaming with no values");
             
-            if (it->valid_to == old_epoch) {
-                if (i != 0 && boost::prior(it)->valid_to >= new_epoch)
-                    throw Exception("new epoch not ordered with respect to "
-                                    "old");
-                if (i != history.size() - 1
-                    && boost::next(it)->valid_to <= new_epoch)
-                    throw Exception("new epoch not ordered with respect to "
-                                    "old 2");
-                
-                it->valid_to = new_epoch;
-                return;
+            if (old_valid_from < d->history[0].valid_to) {
+                // The last one doesn't have a valid_from, so we assume that
+                // it's ok and leave it.
+                if (s == 2)
+                    return d->history[1].valid_to;
+                else return 0;
             }
-        }
 
-        using namespace std;
-        cerr << "---------------------" << endl;
-        cerr << "old_epoch = " << old_epoch << endl;
-        cerr << "new_epoch = " << new_epoch << endl;
-        dump_unlocked();
-        throw Exception("attempt to rename something that didn't exist");
-#endif
+            // This is subtle.  Since we have valid_to values stored and not
+            // valid_from values, we need to find the particular one and change
+            // it.
+            
+            // TODO: maybe we could modify in place???
+            Data * d2 = new_data(*d, d->capacity);
+
+            // TODO: optimize
+            int result = 0;
+            bool found = false;
+            for (unsigned i = 0;  i != s;  ++i) {
+                if (d2->history[i].valid_to != old_valid_from) continue;
+                d2->history[i].valid_to = new_valid_from;
+                found = true;
+                if (i == s - 3)
+                    result = d2->history[s - 2].valid_to;
+                break;
+            }
+
+            if (!found)
+                throw Exception("not found");
+
+            if (set_data(d, d2)) return result;
+        }
     }
 
     virtual void dump(std::ostream & stream = std::cerr, int indent = 0) const

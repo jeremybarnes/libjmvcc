@@ -27,6 +27,8 @@
 #include <sched.h>
 #include "jmvcc/transaction.h"
 #include "jmvcc/versioned.h"
+#include "jmvcc/versioned2.h"
+
 
 using namespace ML;
 using namespace JMVCC;
@@ -41,10 +43,13 @@ BOOST_AUTO_TEST_CASE( test0 )
     current_epoch_ = 600;
     earliest_epoch_ = 600;
 
-    Versioned<int> var(0);
+    Versioned2<int> var(0);
 
     BOOST_CHECK_EQUAL(var.history_size(), 0);
-    BOOST_CHECK_EQUAL(var.read(), 0);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 0);
+    }
 
     auto_ptr<Transaction> t1(new Transaction());
     BOOST_REQUIRE_EQUAL(snapshot_info.entry_count(), 1);
@@ -54,7 +59,11 @@ BOOST_AUTO_TEST_CASE( test0 )
 
     BOOST_CHECK_NO_THROW(snapshot_info.compress_epochs());
 
-    BOOST_CHECK_EQUAL(var.read(), 0);
+    {
+        Local_Transaction trans;
+        BOOST_CHECK_EQUAL(var.read(), 0);
+    }
+
     BOOST_CHECK_EQUAL(t1->epoch(), 1);
     BOOST_CHECK_EQUAL(get_current_epoch(), 2);
     BOOST_CHECK_EQUAL(get_earliest_epoch(), 1);
@@ -95,7 +104,7 @@ void run_test(int test_num)
     current_epoch_ = 600;
     earliest_epoch_ = 600;
 
-    Versioned<int> var(0);
+    Versioned2<int> var(0);
 
     BOOST_CHECK_EQUAL(var.history_size(), 0);
     {
@@ -529,13 +538,13 @@ BOOST_AUTO_TEST_CASE( test4 )
 
 
 struct Object_Test_Thread2 {
-    Versioned<int> * vars;
+    Versioned2<int> * vars;
     int nvars;
     int iter;
     boost::barrier & barrier;
     size_t & failures;
 
-    Object_Test_Thread2(Versioned<int> * vars,
+    Object_Test_Thread2(Versioned2<int> * vars,
                         int nvars,
                         int iter, boost::barrier & barrier,
                         size_t & failures)
@@ -601,6 +610,7 @@ struct Object_Test_Thread2 {
 
 void epoch_compression_thread(volatile bool & finished)
 {
+    return;
     while (!finished) snapshot_info.compress_epochs();
 }
 
@@ -608,7 +618,7 @@ void run_epoch_compression_test(int nthreads, int niter, int nvals)
 {
     cerr << "testing with " << nthreads << " threads and " << niter << " iter"
          << endl;
-    Versioned<int> vals[nvals];
+    Versioned2<int> vals[nvals];
     boost::barrier barrier(nthreads);
     boost::thread_group tg;
 
@@ -634,8 +644,11 @@ void run_epoch_compression_test(int nthreads, int niter, int nvals)
     tg2.join_all();
 
     ssize_t total = 0;
-    for (unsigned i = 0;  i < nvals;  ++i)
-        total += vals[i].read();
+    {
+        Local_Transaction trans;
+        for (unsigned i = 0;  i < nvals;  ++i)
+            total += vals[i].read();
+    }
 
     BOOST_CHECK_EQUAL(snapshot_info.entry_count(), 0);
 
@@ -647,22 +660,14 @@ void run_epoch_compression_test(int nthreads, int niter, int nvals)
     }
 }
 
-#if 0
-
 BOOST_AUTO_TEST_CASE( stress_test_epoch_compression )
 {
     //run_epoch_compression_test(1, 10, 1);
     //run_epoch_compression_test(2, 20, 10);
-    run_epoch_compression_test(2,  5000, 2);
-    run_epoch_compression_test(10, 1000, 100);
-    run_epoch_compression_test(100, 100, 10);
-    run_epoch_compression_test(1000, 10, 100);
 
-    boost::timer t;
-    run_epoch_compression_test(1, 10000, 1);
-    cerr << "elapsed for 1000000 iterations: " << t.elapsed() << endl;
-    cerr << "for 2^32 iterations: " << (1ULL << 32) / 1000000.0 * t.elapsed()
-         << "s" << endl;
+    run_epoch_compression_test(1, 100000, 2);
+    run_epoch_compression_test(2,  50000, 2);
+    run_epoch_compression_test(10, 10000, 100);
+    run_epoch_compression_test(100, 1000, 10);
+    run_epoch_compression_test(1000, 100, 100);
 }
-
-#endif

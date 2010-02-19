@@ -455,9 +455,13 @@ compress_epochs()
     // TOOD: possible race condition with earliest_epoch(): when should it
     // be modified?
 
-    cerr << "compress epochs: " << entries.size() << " entries" << endl;
+    bool debug = false;
 
-    dump_unlocked();
+    if (debug) {
+        cerr << "compress epochs: " << entries.size() << " entries" << endl;
+
+        dump_unlocked();
+    }
 
     hash_map<Epoch, vector<Versioned_Object *> > extra_versions;
 
@@ -467,7 +471,8 @@ compress_epochs()
         int old_epoch = it->first;
         int new_epoch = i;
 
-        cerr << "renaming " << old_epoch << " to " << new_epoch << endl;
+        if (debug)
+            cerr << "renaming " << old_epoch << " to " << new_epoch << endl;
 
         if (old_epoch == new_epoch) {
             ++it;
@@ -482,8 +487,9 @@ compress_epochs()
         
         Entry & entry = it->second;
 
-        cerr << entry.cleanups.size() << " cleanups" << endl;
-
+        if (debug)
+            cerr << entry.cleanups.size() << " cleanups" << endl;
+        
         /* The cleanup list points to all things that need to be in this
            epoch. */
         for (Cleanups::iterator
@@ -495,9 +501,11 @@ compress_epochs()
             Versioned_Object * obj = jt->object;
             size_t valid_from = jt->valid_from;
 
-            cerr << "  object " << obj << " before renaming "
-                 << old_epoch << " to " << new_epoch << ":" << endl;
-            obj->dump(cerr, 4);
+            if (debug) {
+                cerr << "  object " << obj << " before renaming "
+                     << old_epoch << " to " << new_epoch << ":" << endl;
+                obj->dump(cerr, 4);
+            }
 
             // TODO: if this throws? (not allowed to)
             // The next gives the valid_from of the final version, which is
@@ -512,10 +520,12 @@ compress_epochs()
             if (next != 0)
                 extra_versions[next].push_back(obj);
 
-            cerr << "  object " << obj << " after renaming "
-                 << old_epoch << " to " << new_epoch << " with next "
-                 << next << ":" << endl;
-            obj->dump(cerr, 4);
+            if (debug) {
+                cerr << "  object " << obj << " after renaming "
+                     << old_epoch << " to " << new_epoch << " with next "
+                     << next << ":" << endl;
+                obj->dump(cerr, 4);
+            }
 
             // Put it back in the cleanup list with the new epoch
             jt->valid_from = new_epoch;
@@ -535,23 +545,29 @@ compress_epochs()
                 Versioned_Object * obj = *jt;
                 size_t valid_from = old_epoch;
 
-                cerr << "  final object " << obj << " before renaming "
-                     << old_epoch << " to " << new_epoch << ":" << endl;
-                obj->dump(cerr, 4);
+                if (debug) {
+                    cerr << "  final object " << obj << " before renaming "
+                         << old_epoch << " to " << new_epoch << ":" << endl;
+                    obj->dump(cerr, 4);
+                }
 
                 obj->rename_epoch(valid_from, new_epoch);
 
-                cerr << "  object " << obj << " after renaming "
-                     << old_epoch << " to " << new_epoch << endl;
-                obj->dump(cerr, 4);
+                if (debug) {
+                    cerr << "  object " << obj << " after renaming "
+                         << old_epoch << " to " << new_epoch << endl;
+                    obj->dump(cerr, 4);
+                }
             }
         }
 
         // Make sure writes are visible before we continue
         memory_barrier();
 
-        cerr << "renaming epochs" << endl;
-        dump_unlocked();
+        if (debug) {
+            cerr << "renaming epochs" << endl;
+            dump_unlocked();
+        }
 
         for (set<Snapshot *>::iterator
                  jt = entry.snapshots.begin(),
@@ -573,8 +589,10 @@ compress_epochs()
         it = new_it;
     }
 
-    cerr << "------------ finished renaming" << endl;
-    dump_unlocked();
+    if (debug) {
+        cerr << "------------ finished renaming" << endl;
+        dump_unlocked();
+    }
 
     current_epoch_ = i;
     earliest_epoch_ = 1;
@@ -675,10 +693,12 @@ void
 Snapshot::
 rename_epoch(Epoch old_epoch, Epoch new_epoch)
 {
-    cerr << "rename_epoch at " << this << endl;
-    cerr << "epoch_ = " << epoch_ << endl;
-    cerr << "old_epoch = " << old_epoch << endl;
-    cerr << "new_epoch = " << new_epoch << endl;
+    if (false) {
+        cerr << "rename_epoch at " << this << endl;
+        cerr << "epoch_ = " << epoch_ << endl;
+        cerr << "old_epoch = " << old_epoch << endl;
+        cerr << "new_epoch = " << new_epoch << endl;
+    }
     if (epoch_ != old_epoch)
         throw Exception("wrong old epoch");
     epoch_ = new_epoch;
