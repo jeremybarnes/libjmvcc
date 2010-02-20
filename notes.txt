@@ -280,3 +280,11 @@ testing 2 with 1 threads and 1000000 iter class JMVCC::Versioned2<int>
 elapsed: elapsed: [1.85s cpu, 4933.8928 mticks, 1.85s wall]
 elapsed for 1000000 iterations: 1.85
 for 2^32 iterations: 7945.69s
+
+
+With counters off:
+
+
+
+With no actually enqueueing:
+

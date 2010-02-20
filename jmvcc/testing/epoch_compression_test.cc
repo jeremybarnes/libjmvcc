@@ -610,7 +610,6 @@ struct Object_Test_Thread2 {
 
 void epoch_compression_thread(volatile bool & finished)
 {
-    return;
     while (!finished) snapshot_info.compress_epochs();
 }
 
